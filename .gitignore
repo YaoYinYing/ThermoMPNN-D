@@ -138,14 +138,16 @@ artifacts
 extra_utils
 .idea/
 preprocessing/.ipynb_checkpoints
-proteinmpnn/models
 *.csv
 inbox/
 test.yaml
 test.sh
-proteinmpnn/*
+
 
 *.pdf
 jobs
 /examples
 *.ckpt
+*.zip
+.DS_Store
+model_weights
