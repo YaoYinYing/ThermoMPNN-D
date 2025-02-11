@@ -72,10 +72,10 @@ def get_ssm_mutations_double(pdb, dthresh):
 
 
 def run_double(
-    all_mpnn_hid, mpnn_embed, cfg, loader, batch_size, model, X, mask, mpnn_edges_raw
+    all_mpnn_hid, mpnn_embed, cfg, loader, batch_size, model, X, mask, mpnn_edges_raw, device = "cuda"
 ):
     """Batched mutation processing using shared protein embeddings and only stability prediction module head"""
-    device = "cuda"
+    
     all_mpnn_hid = torch.cat(all_mpnn_hid[: cfg.model.num_final_layers], -1)
     all_mpnn_hid = all_mpnn_hid.repeat(batch_size, 1, 1)
     mpnn_embed = mpnn_embed.repeat(batch_size, 1, 1)
@@ -230,18 +230,17 @@ class SSMDataset(torch.utils.data.Dataset):
         return self.POS[index, :], self.WTAA[index, :], self.MUTAA[index, :]
 
 
-def run_single_ssm(pdb, cfg, model):
+def run_single_ssm(pdb, cfg, model, device='cuda'):
     """Runs single-mutant SSM sweep with ThermoMPNN v2"""
 
     model.eval()
-    model.cuda()
+    model.to(device)
     stime = time.time()
 
     # placeholder mutation to keep featurization from throwing error
     pdb["mutation"] = Mutation([0], ["A"], ["A"], [0.0], "")
 
     # featurize input
-    device = "cuda"
     batch = tied_featurize_mut([pdb])
     (
         X,
@@ -398,18 +397,17 @@ def format_output_epistatic(ddg, S, pos, wtAA, mutAA, threshold=-0.5):
     return ddg, mut_list
 
 
-def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size):
+def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device = "cuda"):
     """Run epistatic model on double mutations"""
 
     model.eval()
-    model.cuda()
+    model.to(device)
     stime = time.time()
 
     # placeholder mutation to keep featurization from throwing error
     pdb["mutation"] = Mutation([0], ["A"], ["A"], [0.0], "")
 
     # featurize input
-    device = "cuda"
     batch = tied_featurize_mut([pdb])
     (
         X,
@@ -447,7 +445,7 @@ def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size):
     loader = DataLoader(dataset, shuffle=False, batch_size=batch_size, num_workers=8)
 
     preds = run_double(
-        all_mpnn_hid, mpnn_embed, cfg, loader, batch_size, model, X, mask, mpnn_edges
+        all_mpnn_hid, mpnn_embed, cfg, loader, batch_size, model, X, mask, mpnn_edges, device=device
     )
     ddg, mutations = format_output_epistatic(
         preds, S, MUT_POS, MUT_WT_AA, MUT_MUT_AA, threshold
@@ -493,6 +491,7 @@ class ThermoMPNN:
             threshold: float = -0.5,
             distance: float = 5.0,
             ss_penalty: bool = False,
+            device: str = 'cuda',
     ) -> None:
         self.pdb = pdb
         self.out = out
@@ -502,7 +501,31 @@ class ThermoMPNN:
         self.distance = distance
         self.ss_penalty = ss_penalty
         self.mode = mode
+        self.device = device
 
+        self.pick_device()
+        
+
+    def pick_device(self):
+        if self.device == 'cuda':
+            if torch.cuda.is_available():
+                self.device = 'cuda'
+            else:
+                self.device = 'cpu'
+        elif self.device == 'mps':
+            if torch.backends.mps.is_available() and torch.backends.mps.is_built():
+                self.device = 'mps'
+            else:
+                self.device = 'cpu'
+        else:
+            self.device = 'cpu'
+
+
+        print('-'*79)
+        print(f"Using device: {self.device}")
+        print('-'*79)
+
+    
     def process(self):
         '''
         Run ThermoMPNN on a PDB file.
@@ -515,7 +538,7 @@ class ThermoMPNN:
         print(f"Loaded PDB {pdbname}")
 
         if (self.mode == "single") or (self.mode == "additive"):
-            ddg, S = run_single_ssm(pdb_data, cfg, model)
+            ddg, S = run_single_ssm(pdb_data, cfg, model, device=self.device)
 
             if self.mode == "single":
                 ddg, mutations = format_output_single(ddg, S, self.threshold)
@@ -526,7 +549,7 @@ class ThermoMPNN:
 
         elif self.mode == "epistatic":
             ddg, mutations = run_epistatic_ssm(
-                pdb_data, cfg, model, self.distance, self.threshold, self.batch_size
+                pdb_data, cfg, model, self.distance, self.threshold, self.batch_size, device=self.device
             )
 
         else:
@@ -609,6 +632,9 @@ def main():
         action="store_true",
         help="Add explicit disulfide breakage penalty. Default is False.",
     )
+    parser.add_argument(
+        "--device", type=str, help="device to use", default="cpu"
+    )
     args = parser.parse_args()
     m = ThermoMPNN(
         pdb=args.pdb,
@@ -619,5 +645,6 @@ def main():
         threshold=args.threshold,
         distance=args.distance,
         ss_penalty=args.ss_penalty,
+        device=args.device,
     )
     m.process()
