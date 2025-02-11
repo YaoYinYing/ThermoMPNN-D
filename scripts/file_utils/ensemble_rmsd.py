@@ -46,7 +46,7 @@ def main(args):
     for pre in tqdm(prefixes):
         ensemble_members = [p for p in pdbs if pre in p]
         rms_all = []
-        print('{} ensemble members for protein {}'.format(len(ensemble_members), pre))
+        print(f'{len(ensemble_members)} ensemble members for protein {pre}')
         for ens1 in ensemble_members:
             for ens2 in ensemble_members:
                 if ens1 != ens2:

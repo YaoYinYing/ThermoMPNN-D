@@ -30,7 +30,7 @@ def run_prediction_batched(name, model, dataset_name, dataset, results, keep=Tru
     model = model.eval()
     model = model.cuda()
 
-    print('Testing Model {} on dataset {}'.format(name, dataset_name))
+    print(f'Testing Model {name} on dataset {dataset_name}')
     preds, ddgs = [], []
 
     loader = DataLoader(

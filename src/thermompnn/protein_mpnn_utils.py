@@ -167,8 +167,7 @@ def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False, side_chains=Fal
                 sidechain_atoms = ['N', 'CA', 'C', 'O']
             xyz, seq = parse_PDB_biounits(biounit, atoms=sidechain_atoms, chain=letter)
 
-
-            if not isinstance(xyz,str):
+            if not isinstance(xyz, str):
                 concat_seq += seq[0]
                 my_dict['seq_chain_' + letter] = seq[0]
                 coords_dict_chain = {}
@@ -177,9 +176,9 @@ def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False, side_chains=Fal
                 elif side_chains:  # auto-load all atoms
                     xyz = collapse_side_chains(xyz)
                     sc_atoms = ["N", "CA", "C", "O",
-                                  "SC1", "SC2", "SC3", "SC4",
-                                  "SC5", "SC6", "SC7", "SC8",
-                                  "SC9", "SC10"]
+                                "SC1", "SC2", "SC3", "SC4",
+                                "SC5", "SC6", "SC7", "SC8",
+                                "SC9", "SC10"]
                     for sc_idx, sca in enumerate(sc_atoms):
                         coords_dict_chain[f'{sca}_chain_{letter}'] = xyz[:, sc_idx, :].tolist()
                 else:
@@ -285,7 +284,7 @@ def alt_parse_PDB_biounits(x, atoms=['N', 'CA', 'C'], chain=None):
             else:
                 seq_.append(20)
                 # if str(resn - 1) not in resn_list:
-                   # print(resn, '**')
+                # print(resn, '**')
                 # resn_list.append('DASH')
             # print(resn, resn_list[-1])
             if resn in xyz:
@@ -347,9 +346,9 @@ def alt_parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False, side_chains
                     if side_chains:
                         xyz = collapse_side_chains(xyz)
                     sc_atoms = ["N", "CA", "C", "O",
-                                  "SC1", "SC2", "SC3", "SC4",
-                                  "SC5", "SC6", "SC7", "SC8",
-                                  "SC9", "SC10"]
+                                "SC1", "SC2", "SC3", "SC4",
+                                "SC5", "SC6", "SC7", "SC8",
+                                "SC9", "SC10"]
                     for sc_idx, sca in enumerate(sc_atoms):
                         coords_dict_chain[f'{sca}_chain_{letter}'] = xyz[:, sc_idx, :].tolist()
                 else:
@@ -410,12 +409,10 @@ def tied_featurize(batch, device, chain_dict, fixed_position_dict=None, omit_AA_
         else:
             masked_chains = [item[-1:] for item in list(b) if item[:10] == 'seq_chain_']
             visible_chains = []
-        num_chains = b['num_of_chains']
+        b['num_of_chains']
         all_chains = masked_chains + visible_chains
         # random.shuffle(all_chains)
     for i, b in enumerate(batch):
-        mask_dict = {}
-        a = 0
         x_chain_list = []
         chain_mask_list = []
         chain_seq_list = []
@@ -534,7 +531,7 @@ def tied_featurize(batch, device, chain_dict, fixed_position_dict=None, omit_AA_
         if tied_positions_dict is not None:
             tied_pos_list = tied_positions_dict[b['name']]
             if tied_pos_list:
-                set_chains_tied = set(list(itertools.chain(*[list(item) for item in tied_pos_list])))
+                set(list(itertools.chain(*[list(item) for item in tied_pos_list])))
                 for tied_item in tied_pos_list:
                     one_list = []
                     for k, v in tied_item.items():
@@ -726,7 +723,7 @@ class StructureDatasetPDB():
         start = time.time()
         for i, entry in enumerate(pdb_dict_list):
             seq = entry['seq']
-            name = entry['name']
+            entry['name']
 
             bad_chars = {s for s in seq}.difference(alphabet_set)
             if len(bad_chars) == 0:
@@ -742,7 +739,7 @@ class StructureDatasetPDB():
                 return
 
             if verbose and (i + 1) % 1000 == 0:
-                elapsed = time.time() - start
+                time.time() - start
 
             # print('Discarded', discard_count)
 
@@ -1138,7 +1135,7 @@ class ProteinFeatures(nn.Module):
         D = mask_2D * torch.sqrt(torch.sum(dX ** 2, 3) + eps)
         D_max, _ = torch.max(D, -1, keepdim=True)
         D_adjust = D + (1. - mask_2D) * D_max
-        sampled_top_k = self.top_k
+        self.top_k
         D_neighbors, E_idx = torch.topk(D_adjust, np.minimum(self.top_k, X.shape[1]), dim=-1, largest=False)
         return D_neighbors, E_idx
 
@@ -1234,24 +1231,24 @@ class ProteinMPNN(nn.Module):
 
         if not use_ipmp:
             self.encoder_layers = nn.ModuleList([
-                EncLayer(hidden_dim, hidden_dim *2, dropout=dropout)
+                EncLayer(hidden_dim, hidden_dim * 2, dropout=dropout)
                 for _ in range(num_encoder_layers)
             ])
         else:
             self.encoder_layers = nn.ModuleList([
-                IPMPEncoder(hidden_dim, hidden_dim *2, dropout=dropout, n_points=n_points)
+                IPMPEncoder(hidden_dim, hidden_dim * 2, dropout=dropout, n_points=n_points)
                 for _ in range(num_encoder_layers)
             ])
 
         # Decoder layers
         if not use_ipmp:
             self.decoder_layers = nn.ModuleList([
-                DecLayer(hidden_dim, hidden_dim *3, dropout=dropout)
+                DecLayer(hidden_dim, hidden_dim * 3, dropout=dropout)
                 for _ in range(num_decoder_layers)
             ])
         else:
             self.decoder_layers = nn.ModuleList([
-                IPMPDecoder(hidden_dim, hidden_dim *3, dropout=dropout, n_points=n_points)
+                IPMPDecoder(hidden_dim, hidden_dim * 3, dropout=dropout, n_points=n_points)
                 for _ in range(num_decoder_layers)
             ])
         self.W_out = nn.Linear(hidden_dim, num_letters, bias=True)
@@ -1291,7 +1288,8 @@ class ProteinMPNN(nn.Module):
         # default ProteinMPNN random autoregressive decoding
         if randn is not None:
             randn = torch.randn(chain_M.shape, device=X.device)
-            decoding_order = torch.argsort((chain_M+0.0001)*(torch.abs(randn)))  # [numbers will be smaller for places where chain_M = 0.0 and higher for places where chain_M = 1.0]
+            # [numbers will be smaller for places where chain_M = 0.0 and higher for places where chain_M = 1.0]
+            decoding_order = torch.argsort((chain_M + 0.0001) * (torch.abs(randn)))
 
         # left-to-right decoding order
         else:
@@ -1301,15 +1299,15 @@ class ProteinMPNN(nn.Module):
         # one hot encode decoding order
         permutation_matrix_reverse = torch.nn.functional.one_hot(decoding_order, num_classes=mask_size).float()
         order_mask_backward = torch.einsum(
-    'ij, biq, bjp->bqp',
-    (1 -
-    torch.triu(
-        torch.ones(
-            mask_size,
-            mask_size,
-            device=device))),
+            'ij, biq, bjp->bqp',
+            (1 -
+             torch.triu(
+                 torch.ones(
+                     mask_size,
+                     mask_size,
+                     device=device))),
             permutation_matrix_reverse,
-             permutation_matrix_reverse)  # [1, L_max, L_max] array of visibility ordered backward
+            permutation_matrix_reverse)  # [1, L_max, L_max] array of visibility ordered backward
 
         # set all residues to be visible
         order_mask_backward = torch.ones_like(order_mask_backward)
@@ -1373,7 +1371,7 @@ class ProteinMPNN(nn.Module):
         # Decoder uses masked self-attention
         chain_mask = chain_mask * chain_M_pos * mask  # update chain_M to include missing regions
         # [numbers will be smaller for places where chain_M = 0.0 and higher for places where chain_M = 1.0]
-        decoding_order = torch.argsort((chain_mask + 0.0001) * (torch.abs( randn)))
+        decoding_order = torch.argsort((chain_mask + 0.0001) * (torch.abs(randn)))
         mask_size = E_idx.shape[1]
         permutation_matrix_reverse = torch.nn.functional.one_hot(decoding_order, num_classes=mask_size).float()
         order_mask_backward = torch.einsum('ij, biq, bjp->bqp',
@@ -1419,31 +1417,35 @@ class ProteinMPNN(nn.Module):
                     h_ESV_decoder_t = cat_neighbors_nodes(h_V_stack[l], h_ES_t, E_idx_t)
                     h_V_t = torch.gather(h_V_stack[l], 1, t[:, None, None].repeat(1, 1, h_V_stack[l].shape[-1]))
                     h_ESV_t = torch.gather(mask_bw, 1, t[:, None, None, None].repeat(
-                        1, 1, mask_bw.shape[-2], mask_bw.shape[ -1])) * h_ESV_decoder_t + h_EXV_encoder_t
+                        1, 1, mask_bw.shape[-2], mask_bw.shape[-1])) * h_ESV_decoder_t + h_EXV_encoder_t
                     h_V_stack[l + 1].scatter_(1, t[:, None, None].repeat(1, 1, h_V.shape[-1]),
                                               layer(h_V_t, h_ESV_t, mask_V=mask_t))
                 # Sampling step
                 h_V_t = torch.gather(h_V_stack[-1], 1, t[:, None, None].repeat(1, 1, h_V_stack[-1].shape[-1]))[:, 0]
                 logits = self.W_out(h_V_t) / temperature
-                probs = F.softmax(logits - constant[None, :] * 1e8 + constant_bias[None,
-                                                                                   :] / temperature + bias_by_res_gathered / temperature,
-                                  dim=-1)
+                probs = F.softmax(logits -
+                                  constant[None, :] *
+                                  1e8 +
+                                  constant_bias[None, :] /
+                                  temperature +
+                                  bias_by_res_gathered /
+                                  temperature, dim=-
+                                  1)
                 if pssm_bias_flag:
                     pssm_coef_gathered = torch.gather(pssm_coef, 1, t[:, None])[:, 0]
                     pssm_bias_gathered = torch.gather(pssm_bias, 1, t[:, None, None].repeat(1, 1, pssm_bias.shape[-1]))[
                         :, 0]
-                    probs = (1 - pssm_multi * pssm_coef_gathered[:, None]) * probs + pssm_multi * pssm_coef_gathered[:,
-                                                                                                                     None] * pssm_bias_gathered
+                    probs = (1 - pssm_multi * pssm_coef_gathered[:, None]) * probs + \
+                        pssm_multi * pssm_coef_gathered[:, None] * pssm_bias_gathered
                 if pssm_log_odds_flag:
                     pssm_log_odds_mask_gathered = torch.gather(pssm_log_odds_mask, 1, t[:, None, None].repeat(
-                        1, 1, pssm_log_odds_mask.shape[ -1]))[ :, 0] # [B, 21]
+                        1, 1, pssm_log_odds_mask.shape[-1]))[:, 0]  # [B, 21]
                     probs_masked = probs * pssm_log_odds_mask_gathered
                     probs_masked += probs * 0.001
                     probs = probs_masked / torch.sum(probs_masked, dim=-1, keepdim=True)  # [B, 21]
                 if omit_AA_mask_flag:
-                    omit_AA_mask_gathered = torch.gather(omit_AA_mask, 1,
-                                                         t[:, None, None].repeat(1, 1, omit_AA_mask.shape[-1]))[:,
-                                                                                                                0]  # [B, 21]
+                    omit_AA_mask_gathered = torch.gather(omit_AA_mask, 1, t[:, None, None].repeat(
+                        1, 1, omit_AA_mask.shape[-1]))[:, 0]  # [B, 21]
                     probs_masked = probs * (1.0 - omit_AA_mask_gathered)
                     probs = probs_masked / torch.sum(probs_masked, dim=-1, keepdim=True)  # [B, 21]
                 S_t = torch.multinomial(probs, 1)
@@ -1475,7 +1477,7 @@ class ProteinMPNN(nn.Module):
         # Decoder uses masked self-attention
         chain_mask = chain_mask * chain_M_pos * mask  # update chain_M to include missing regions
         # [numbers will be smaller for places where chain_M = 0.0 and higher for places where chain_M = 1.0]
-        decoding_order = torch.argsort((chain_mask + 0.0001) * (torch.abs( randn)))
+        decoding_order = torch.argsort((chain_mask + 0.0001) * (torch.abs(randn)))
 
         new_decoding_order = []
         for t_dec in list(decoding_order[0,].cpu().data.numpy()):
@@ -1541,14 +1543,19 @@ class ProteinMPNN(nn.Module):
                 pass
             else:
                 bias_by_res_gathered = bias_by_res[:, t, :]  # [B, 21]
-                probs = F.softmax(logits - constant[None, :] * 1e8 + constant_bias[None,
-                                                                                   :] / temperature + bias_by_res_gathered / temperature,
-                                  dim=-1)
+                probs = F.softmax(logits -
+                                  constant[None, :] *
+                                  1e8 +
+                                  constant_bias[None, :] /
+                                  temperature +
+                                  bias_by_res_gathered /
+                                  temperature, dim=-
+                                  1)
                 if pssm_bias_flag:
                     pssm_coef_gathered = pssm_coef[:, t]
                     pssm_bias_gathered = pssm_bias[:, t]
-                    probs = (1 - pssm_multi * pssm_coef_gathered[:, None]) * probs + pssm_multi * pssm_coef_gathered[:,
-                                                                                                                     None] * pssm_bias_gathered
+                    probs = (1 - pssm_multi * pssm_coef_gathered[:, None]) * probs + \
+                        pssm_multi * pssm_coef_gathered[:, None] * pssm_bias_gathered
                 if pssm_log_odds_flag:
                     pssm_log_odds_mask_gathered = pssm_log_odds_mask[:, t]
                     probs_masked = probs * pssm_log_odds_mask_gathered
@@ -1559,8 +1566,8 @@ class ProteinMPNN(nn.Module):
                     probs_masked = probs * (1.0 - omit_AA_mask_gathered)
                     probs = probs_masked / torch.sum(probs_masked, dim=-1, keepdim=True)  # [B, 21]
                 S_t_repeat = torch.multinomial(probs, 1).squeeze(-1)
-                S_t_repeat = (chain_mask[:, t] * S_t_repeat + (1 - chain_mask[:, t]) * S_true[:,
-                                                                                              t]).long()  # hard pick fixed positions
+                S_t_repeat = (chain_mask[:, t] * S_t_repeat + (1 - chain_mask[:, t])
+                              * S_true[:, t]).long()  # hard pick fixed positions
                 for t in t_list:
                     h_S[:, t, :] = self.W_s(S_t_repeat)
                     S[:, t] = S_t_repeat
@@ -1606,7 +1613,7 @@ class ProteinMPNN(nn.Module):
                 order_mask = torch.zeros(chain_M.shape[1], device=device).float()
                 order_mask[idx] = 1.
             # [numbers will be smaller for places where chain_M = 0.0 and higher for places where chain_M = 1.0]
-            decoding_order = torch.argsort((order_mask[None,] + 0.0001) * (torch.abs( randn)))
+            decoding_order = torch.argsort((order_mask[None,] + 0.0001) * (torch.abs(randn)))
             mask_size = E_idx.shape[1]
             permutation_matrix_reverse = torch.nn.functional.one_hot(decoding_order, num_classes=mask_size).float()
             order_mask_backward = torch.einsum('ij, biq, bjp->bqp',
@@ -1650,7 +1657,7 @@ class ProteinMPNN(nn.Module):
         order_mask_backward = torch.zeros([X.shape[0], X.shape[1], X.shape[1]], device=device)
         mask_attend = torch.gather(order_mask_backward, 2, E_idx).unsqueeze(-1)
         mask_1D = mask.view([mask.size(0), mask.size(1), 1, 1])
-        mask_bw = mask_1D * mask_attend
+        mask_1D * mask_attend
         mask_fw = mask_1D * (1. - mask_attend)
 
         h_EXV_encoder_fw = mask_fw * h_EXV_encoder

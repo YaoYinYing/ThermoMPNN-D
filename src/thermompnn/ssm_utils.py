@@ -13,10 +13,10 @@ from thermompnn.trainer.v2_trainer import (TransferModelPLv2,
                                            TransferModelPLv2Siamese)
 from thermompnn.utils.get_weights import thermompnn_weigths
 
-CONFIG_DIR=os.path.join(os.path.dirname(os.path.realpath(__file__)), "configs")
+CONFIG_DIR = os.path.join(os.path.dirname(os.path.realpath(__file__)), "configs")
+
 
 def get_model(mode: Literal['single', 'epistatic'], config):
-    cwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     model_dir = thermompnn_weigths.setup()
 
     if (mode.lower() == "single") or (mode.lower() == "additive"):
@@ -53,7 +53,7 @@ def get_chains(pdb_file, chain_list):
 def get_config(mode):
     """Grabs relevant configs from disk."""
 
-    current_location = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
     local = os.path.join(CONFIG_DIR, "local.yaml")
 
     if mode == "single" or mode == "additive":
@@ -294,12 +294,6 @@ def custom_parse_PDB(
         my_dict = {}
         s = 0
         concat_seq = ""
-        concat_N = []
-        concat_CA = []
-        concat_C = []
-        concat_O = []
-        concat_mask = []
-        coords_dict = {}
         for letter in chain_alphabet:
             if ca_only:
                 sidechain_atoms = ["CA"]
@@ -350,7 +344,6 @@ def custom_parse_PDB(
             )
             if resn_list != "no_chain":
                 my_dict["resn_list_" + letter] = resn_list
-
 
             if not isinstance(xyz, str):
                 concat_seq += seq[0]

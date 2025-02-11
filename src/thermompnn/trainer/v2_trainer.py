@@ -126,7 +126,7 @@ class TransferModelPLv2Siamese(pl.LightningModule):
         self.dev = torch.device("cuda:0" if (torch.cuda.is_available()) else "cpu")
         self.ALPHA = self.cfg.model.alpha  # weight for avg MSE loss term
         self.BETA = self.cfg.model.beta  # weight for sym loss term
-        print('Relative loss weights:\nALPHA:\t{}\nBETA:\t{}'.format(str(self.ALPHA), str(self.BETA)))
+        print(f'Relative loss weights:\nALPHA:\t{str(self.ALPHA)}\nBETA:\t{str(self.BETA)}')
         self.out = ['ddG']
         self.metrics = nn.ModuleDict()
         for split in ("train_metrics", "val_metrics"):

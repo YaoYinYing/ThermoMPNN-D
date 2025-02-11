@@ -145,24 +145,24 @@ def rot_to_quat(
 
 _QUAT_MULTIPLY = np.zeros((4, 4, 4))
 _QUAT_MULTIPLY[:, :, 0] = [[1, 0, 0, 0],
-                          [0, -1, 0, 0],
-                          [0, 0, -1, 0],
-                          [0, 0, 0, -1]]
+                           [0, -1, 0, 0],
+                           [0, 0, -1, 0],
+                           [0, 0, 0, -1]]
 
 _QUAT_MULTIPLY[:, :, 1] = [[0, 1, 0, 0],
-                          [1, 0, 0, 0],
-                          [0, 0, 0, 1],
-                          [0, 0, -1, 0]]
+                           [1, 0, 0, 0],
+                           [0, 0, 0, 1],
+                           [0, 0, -1, 0]]
 
 _QUAT_MULTIPLY[:, :, 2] = [[0, 0, 1, 0],
-                          [0, 0, 0, -1],
-                          [1, 0, 0, 0],
-                          [0, 1, 0, 0]]
+                           [0, 0, 0, -1],
+                           [1, 0, 0, 0],
+                           [0, 1, 0, 0]]
 
 _QUAT_MULTIPLY[:, :, 3] = [[0, 0, 0, 1],
-                          [0, 0, 1, 0],
-                          [0, -1, 0, 0],
-                          [1, 0, 0, 0]]
+                           [0, 0, 1, 0],
+                           [0, -1, 0, 0],
+                           [1, 0, 0, 0]]
 
 _QUAT_MULTIPLY_BY_VEC = _QUAT_MULTIPLY[:, 1:, :]
 
@@ -227,7 +227,7 @@ def quat_multiply(quat1, quat2):
         quat1[..., :, None, None] *
         quat2[..., None, :, None],
         dim=(-3, -2)
-        )
+    )
 
 
 def rot_vec_mul(
@@ -379,7 +379,6 @@ class Rotation:
             Returns:
                 The indexed rotation
         """
-
 
         if not isinstance(index, tuple):
             index = (index,)
@@ -542,7 +541,7 @@ class Rotation:
     # Rotation functions
 
     def compose_q_update_vec(self,
-        q_update_vec: torch.Tensor,
+                             q_update_vec: torch.Tensor,
                              normalize_quats: bool = True
                              ):
         """
@@ -699,7 +698,7 @@ class Rotation:
 
     def map_tensor_fn(self,
                       fn: Callable[[torch.Tensor], torch.Tensor]
-    ):
+                      ):
         """
             Apply a Tensor -> Tensor function to underlying rotation tensors,
             mapping over the rotation dimension(s). Can be used e.g. to sum out
@@ -743,7 +742,7 @@ class Rotation:
             raise ValueError("Both rotations are None")
 
     def to(self,
-        device: Optional[torch.device],
+           device: Optional[torch.device],
            dtype: Optional[torch.dtype]
            ):
         """
@@ -797,6 +796,7 @@ class Rigid:
         Designed to behave approximately like a single torch tensor with the
         shape of the shared batch dimensions of its component parts.
     """
+
     def __init__(self,
                  rots: Optional[Rotation],
                  trans: Optional[torch.Tensor],
@@ -1042,7 +1042,7 @@ class Rigid:
 
     def map_tensor_fn(self,
                       fn: Callable[[torch.Tensor], torch.Tensor]
-    ):
+                      ):
         """
             Apply a Tensor -> Tensor function to underlying translation and
             rotation tensors, mapping over the translation/rotation dimensions
@@ -1130,7 +1130,7 @@ class Rigid:
         origin: torch.Tensor,
         p_xy_plane: torch.Tensor,
         eps: float = 1e-8,
-        fixed= True,
+        fixed=True,
     ):
         """
             Implements algorithm 21. Constructs transformations from sets of 3

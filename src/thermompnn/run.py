@@ -72,10 +72,10 @@ def get_ssm_mutations_double(pdb, dthresh):
 
 
 def run_double(
-    all_mpnn_hid, mpnn_embed, cfg, loader, batch_size, model, X, mask, mpnn_edges_raw, device = "cuda"
+    all_mpnn_hid, mpnn_embed, cfg, loader, batch_size, model, X, mask, mpnn_edges_raw, device="cuda"
 ):
     """Batched mutation processing using shared protein embeddings and only stability prediction module head"""
-    
+
     all_mpnn_hid = torch.cat(all_mpnn_hid[: cfg.model.num_final_layers], -1)
     all_mpnn_hid = all_mpnn_hid.repeat(batch_size, 1, 1)
     mpnn_embed = mpnn_embed.repeat(batch_size, 1, 1)
@@ -397,7 +397,7 @@ def format_output_epistatic(ddg, S, pos, wtAA, mutAA, threshold=-0.5):
     return ddg, mut_list
 
 
-def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device = "cuda"):
+def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device="cuda"):
     """Run epistatic model on double mutations"""
 
     model.eval()
@@ -504,7 +504,6 @@ class ThermoMPNN:
         self.device = device
 
         self.pick_device()
-        
 
     def pick_device(self):
         if self.device == 'cuda':
@@ -520,12 +519,10 @@ class ThermoMPNN:
         else:
             self.device = 'cpu'
 
-
-        print('-'*79)
+        print('-' * 79)
         print(f"Using device: {self.device}")
-        print('-'*79)
+        print('-' * 79)
 
-    
     def process(self):
         '''
         Run ThermoMPNN on a PDB file.
@@ -590,6 +587,7 @@ class ThermoMPNN:
         df.to_csv(self.out + ".csv")
 
         return
+
 
 def main():
     parser = argparse.ArgumentParser()

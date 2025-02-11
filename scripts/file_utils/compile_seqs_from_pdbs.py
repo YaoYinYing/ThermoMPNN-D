@@ -13,7 +13,7 @@ def main(args):
     assert os.path.isdir(args.pdbs)
     pdb_list = [s for s in sorted(os.listdir(args.pdbs)) if '.pdb' in s]
 
-    print('Parsing {} pdbs using {} format'.format(len(pdb_list), args.fmt))
+    print(f'Parsing {len(pdb_list)} pdbs using {args.fmt} format')
     for pdb in pdb_list:
         record = get_pdb_seq(os.path.join(args.pdbs, pdb), args.fmt)
         if args.outfmt == 'fasta':

@@ -1,5 +1,6 @@
-import matplotlib.pyplot as plt
 import os
+
+import matplotlib.pyplot as plt
 
 d = 'ProteinMPNN_000_0/'
 f = 'log.txt'

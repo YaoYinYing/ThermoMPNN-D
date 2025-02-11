@@ -315,7 +315,7 @@ class PDB_dataset(torch.utils.data.Dataset):
 def loader_pdb(item, params):
 
     pdbid, chid = item[0].split('_')
-    PREFIX = "%s/pdb/%s/%s" % (params['DIR'], pdbid[1:3], pdbid)
+    PREFIX = "{}/pdb/{}/{}".format(params['DIR'], pdbid[1:3], pdbid)
 
     # load metadata
     if not os.path.isfile(PREFIX + ".pt"):
@@ -332,7 +332,7 @@ def loader_pdb(item, params):
     # if the chains is missing is missing from all the assemblies
     # then return this chain alone
     if len(asmb_candidates) < 1:
-        chain = torch.load("%s_%s.pt" % (PREFIX, chid))
+        chain = torch.load("{}_{}.pt".format(PREFIX, chid))
         L = len(chain['seq'])
         return {'seq': chain['seq'],
                 'xyz': chain['xyz'],
@@ -347,7 +347,7 @@ def loader_pdb(item, params):
     idx = np.where(np.array(asmb_ids) == asmb_i)[0]
 
     # load relevant chains
-    chains = {c: torch.load("%s_%s.pt" % (PREFIX, c))
+    chains = {c: torch.load("{}_{}.pt".format(PREFIX, c))
               for i in idx for c in asmb_chains[i]
               if c in meta['chains']}
 
