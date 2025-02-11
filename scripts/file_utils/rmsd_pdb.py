@@ -1,4 +1,5 @@
 import argparse
+
 from Bio.PDB import PDBParser, Superimposer
 
 
@@ -6,9 +7,9 @@ def select_atoms(ref_model, alt_model, ca=True):
     """Retrieve atoms from a pair of aligned sequences"""
     ref_atoms = []
     alt_atoms = []
-    
+
     # detect # of residues in each chain
-    for (ref_chain, alt_chain) in zip(ref_model, alt_model):     
+    for (ref_chain, alt_chain) in zip(ref_model, alt_model):
         for (ref_res, alt_res) in zip(ref_chain, alt_chain):
             if ca:
                 try:
@@ -27,23 +28,25 @@ def select_atoms(ref_model, alt_model, ca=True):
         raise AssertionError("Structures have different numbers of atoms! Alignment Failed.")
     return ref_atoms, alt_atoms
 
+
 def calculate_RMSD_from_atoms(ref, alt, superimposer):
     """Calculate pairwise RMSD for two proteins"""
     superimposer.set_atoms(ref, alt)
     superimposer.apply(ref)
     return superimposer.rms
 
+
 def main(args):
     """Calculates pairwise RMSD for two aligned PDBs"""
-    
+
     pdb1, pdb2 = args.pdb1, args.pdb2
-    
+
     if not (pdb1.endswith('.pdb') and pdb2.endswith('.pdb')):
         raise AssertionError("Files do not end with .pdb !")
-    
+
     parser = PDBParser(QUIET=True)
     super_imposer = Superimposer()
-    
+
     struct1 = parser.get_structure(pdb1, pdb1)[0]
     struct2 = parser.get_structure(pdb2, pdb2)[0]
 

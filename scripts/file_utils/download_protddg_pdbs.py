@@ -1,8 +1,8 @@
 import argparse
-import pandas as pd
 import os
 import sys
 from urllib import request
+
 import pandas as pd
 from tqdm import tqdm
 
@@ -41,7 +41,7 @@ def main():
 
     if not os.path.isdir(args.o):
         os.makedirs(args.o)
-    
+
     for code in tqdm(pdbs):
         print(code[:4])
         download_pdb(code[:4], args.o)

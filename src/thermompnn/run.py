@@ -6,20 +6,15 @@ from typing import List, Literal, Optional
 import numpy as np
 import pandas as pd
 import torch
+from torch.utils.data import DataLoader
+from tqdm import tqdm
+
 from thermompnn.datasets.dataset_utils import Mutation
 from thermompnn.datasets.v2_datasets import tied_featurize_mut
 from thermompnn.model.v2_model import _dist, batched_index_select
-from thermompnn.ssm_utils import (
-    distance_filter,
-    disulfide_penalty,
-    get_config,
-    get_dmat,
-    get_model,
-    load_pdb,
-    renumber_pdb,
-)
-from torch.utils.data import DataLoader
-from tqdm import tqdm
+from thermompnn.ssm_utils import (distance_filter, disulfide_penalty,
+                                  get_config, get_dmat, get_model, load_pdb,
+                                  renumber_pdb)
 
 
 def get_ssm_mutations_double(pdb, dthresh):
@@ -121,13 +116,13 @@ def run_double(
 
             mpnn_edges_tmp = torch.squeeze(
                 batched_index_select(
-                    mpnn_edges_raw, 1, mut_positions[:, n_current : n_current + 1]
+                    mpnn_edges_raw, 1, mut_positions[:, n_current: n_current + 1]
                 ),
                 1,
             )
             E_idx_tmp = torch.squeeze(
                 batched_index_select(
-                    E_idx, 1, mut_positions[:, n_current : n_current + 1]
+                    E_idx, 1, mut_positions[:, n_current: n_current + 1]
                 ),
                 1,
             )
@@ -162,7 +157,7 @@ def run_double(
         final_embed = []
         for i in range(mut_mutant_AAs.shape[-1]):
             # gather embedding for a specific position
-            current_positions = mut_positions[:, i : i + 1]  # [B, 1]
+            current_positions = mut_positions[:, i: i + 1]  # [B, 1]
             g_struct_embed = torch.gather(
                 all_mpnn_hid,
                 1,
@@ -468,7 +463,8 @@ def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size):
 
 def check_df_size(size):
     if size == 0:
-        raise ValueError("No valid mutations passed your distance and ddG filters. Please increase one or both of these parameters and try again.")
+        raise ValueError(
+            "No valid mutations passed your distance and ddG filters. Please increase one or both of these parameters and try again.")
 
 
 class ThermoMPNN:
@@ -480,32 +476,32 @@ class ThermoMPNN:
         chains (Optional[List[str]], optional): Chains to run SSM on. Defaults to None for all.
         mode (Literal["single", "additive", "epistatic"], optional): SSM mode. Defaults to 'single'.
         batch_size (int, optional): Batch size. Defaults to 256.
-        threshold (float, optional): Threshold for SSM sweep. 
-            By default, ThermoMPNN only saves mutations below this threshold (-0.5 kcal/mol). 
+        threshold (float, optional): Threshold for SSM sweep.
+            By default, ThermoMPNN only saves mutations below this threshold (-0.5 kcal/mol).
             To save all mutations, set this really high (e.g., 100).
         distance (float, optional): Filter for double mutant predictions using pairwise Ca distance cutoff (default is 5 A).
         ss_penalty (bool, optional): Add explicit disulfide breakage penalty. Default is False.
     """
-    
+
     def __init__(
-            self, 
+            self,
             pdb: str,
-            out: str= 'ssm',
-            chains: Optional[List[str]]=None,
-            mode: Literal["single", "additive", "epistatic"]='single', 
-            batch_size: int=256,
-            threshold: float=-0.5,
-            distance: float=5.0,
-            ss_penalty: bool=False,
-            ) -> None:
-        self.pdb=pdb
-        self.out=out
-        self.chains=chains
-        self.batch_size=batch_size
-        self.threshold=threshold
-        self.distance=distance
-        self.ss_penalty=ss_penalty
-        self.mode=mode
+            out: str = 'ssm',
+            chains: Optional[List[str]] = None,
+            mode: Literal["single", "additive", "epistatic"] = 'single',
+            batch_size: int = 256,
+            threshold: float = -0.5,
+            distance: float = 5.0,
+            ss_penalty: bool = False,
+    ) -> None:
+        self.pdb = pdb
+        self.out = out
+        self.chains = chains
+        self.batch_size = batch_size
+        self.threshold = threshold
+        self.distance = distance
+        self.ss_penalty = ss_penalty
+        self.mode = mode
 
     def process(self):
         '''
@@ -599,7 +595,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--threshold",
         type=float,
-        default=-0.5,
+        default=-
+        0.5,
         help="Threshold for SSM sweep. By default, ThermoMPNN only saves mutations below this threshold (-0.5 kcal/mol). To save all mutations, set this really high (e.g., 100)",
     )
     parser.add_argument(
@@ -613,8 +610,8 @@ if __name__ == "__main__":
         action="store_true",
         help="Add explicit disulfide breakage penalty. Default is False.",
     )
-    args=parser.parse_args()
-    m=ThermoMPNN(
+    args = parser.parse_args()
+    m = ThermoMPNN(
         pdb=args.pdb,
         out=args.out,
         chains=args.chains,

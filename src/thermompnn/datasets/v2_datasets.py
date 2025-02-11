@@ -1,21 +1,32 @@
-import torch
-import pandas as pd
-import numpy as np
-import pickle
+import itertools
 import os
-from Bio import pairwise2
-from tqdm import tqdm
+import pickle
 from copy import deepcopy
 from itertools import permutations
-import itertools
+
+import numpy as np
+import pandas as pd
+import torch
+from Bio import pairwise2
 from sklearn.preprocessing import minmax_scale
+from tqdm import tqdm
 
+from thermompnn.datasets.dataset_utils import (ALPHABET, Mutation,
+                                               seq1_index_to_seq2_index)
 from thermompnn.protein_mpnn_utils import alt_parse_PDB, parse_PDB
-from thermompnn.datasets.dataset_utils import Mutation, seq1_index_to_seq2_index, ALPHABET
 
 
-def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict=None, omit_AA_dict=None, tied_positions_dict=None,
-                   pssm_dict=None, bias_by_res_dict=None, ca_only=False, side_chains=False):
+def tied_featurize_mut(
+        batch,
+        device='cpu',
+        chain_dict=None,
+        fixed_position_dict=None,
+        omit_AA_dict=None,
+        tied_positions_dict=None,
+        pssm_dict=None,
+        bias_by_res_dict=None,
+        ca_only=False,
+        side_chains=False):
     """ Pack and pad batch into torch tensors - modified to also handle mutation data"""
     alphabet = 'ACDEFGHIKLMNPQRSTVWYX'
     B = len(batch)
@@ -41,7 +52,7 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
     chain_encoding_all = np.zeros([B, L_max], dtype=np.int32)  # 1.0 for the bits that need to be predicted
     S = np.zeros([B, L_max], dtype=np.int32)
     omit_AA_mask = np.zeros([B, L_max, len(alphabet)], dtype=np.int32)
-    
+
     # Build the batch
     letter_list_list = []
     visible_list_list = []
@@ -58,9 +69,9 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
     MUT_DDG = np.zeros([B, 1], dtype=np.float32)  # Mutation ddG (WT ddG - Mutant ddG)
 
     for i, b in enumerate(batch):
-        
+
         # NOTE: new chunk below
-        if chain_dict != None:
+        if chain_dict is not None:
             masked_chains, visible_chains = chain_dict[
                 b['name']]  # masked_chains a list of chain letters to predict [A, D, F]
         else:
@@ -68,7 +79,7 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
             visible_chains = []
         all_chains = masked_chains + visible_chains
         # NOTE: new chunk above
-        
+
         x_chain_list = []
         chain_mask_list = []
         chain_seq_list = []
@@ -139,7 +150,7 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
                     if len(x_chain.shape) == 2:
                         x_chain = x_chain[:, None, :]
                 elif side_chains:
-                    x_chain = np.stack([chain_coords[c] for c in chain_coords.keys()], 1) # [chain_length, 14, 3]
+                    x_chain = np.stack([chain_coords[c] for c in chain_coords.keys()], 1)  # [chain_length, 14, 3]
                 else:
                     x_chain = np.stack([chain_coords[c] for c in
                                         [f'N_chain_{letter}', f'CA_chain_{letter}', f'C_chain_{letter}',
@@ -153,13 +164,13 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
                 l0 += chain_length
                 c += 1
                 fixed_position_mask = np.ones(chain_length)
-                if fixed_position_dict != None:
+                if fixed_position_dict is not None:
                     fixed_pos_list = fixed_position_dict[b['name']][letter]
                     if fixed_pos_list:
                         fixed_position_mask[np.array(fixed_pos_list) - 1] = 0.0
                 fixed_position_mask_list.append(fixed_position_mask)
                 omit_AA_mask_temp = np.zeros([chain_length, len(alphabet)], np.int32)
-                if omit_AA_dict != None:
+                if omit_AA_dict is not None:
                     for item in omit_AA_dict[b['name']][letter]:
                         idx_AA = np.array(item[0]) - 1
                         AA_idx = np.array([np.argwhere(np.array(list(alphabet)) == AA)[0][0] for AA in item[1]]).repeat(
@@ -186,10 +197,10 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
         letter_list_np = np.array(letter_list)
         tied_pos_list_of_lists = []
         tied_beta = np.ones(L_max)
-        if tied_positions_dict != None:
+        if tied_positions_dict is not None:
             tied_pos_list = tied_positions_dict[b['name']]
             if tied_pos_list:
-                set_chains_tied = set(list(itertools.chain(*[list(item) for item in tied_pos_list])))
+                set(list(itertools.chain(*[list(item) for item in tied_pos_list])))
                 for tied_item in tied_pos_list:
                     one_list = []
                     for k, v in tied_item.items():
@@ -223,11 +234,12 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
 
         m_pad = np.pad(m, [[0, L_max - l]], 'constant', constant_values=(0.0,))
         m_pos_pad = np.pad(m_pos, [[0, L_max - l]], 'constant', constant_values=(0.0,))
-        
+
         # NOTE: this causes size mismatches b/c it pads the seq dim as well as the length dim
         # omit_AA_mask_pad = np.pad(np.concatenate(omit_AA_mask_list, 0), [[0, L_max - l]], 'constant', constant_values=(0.0,))
-        omit_AA_mask_pad = np.pad(np.concatenate(omit_AA_mask_list, 0), [[0, L_max - l], [0, 0]], 'constant', constant_values=(0.0,))
-        
+        omit_AA_mask_pad = np.pad(np.concatenate(omit_AA_mask_list, 0), [
+                                  [0, L_max - l], [0, 0]], 'constant', constant_values=(0.0,))
+
         chain_M[i, :] = m_pad
         chain_M_pos[i, :] = m_pos_pad
         omit_AA_mask[i,] = omit_AA_mask_pad
@@ -253,7 +265,7 @@ def tied_featurize_mut(batch, device='cpu', chain_dict=None, fixed_position_dict
         visible_list_list.append(visible_list)
         masked_list_list.append(masked_list)
         masked_chain_length_list_list.append(masked_chain_length_list)
-        
+
         # retrieving mutant info as a vector
         mut = b['mutation']
         MUT_DDG[i, :] = mut.ddG
@@ -327,7 +339,7 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
         self.wt_seqs = {}
         self.mut_rows = {}
         self.wt_names = df.PDB.unique()
-                 
+
         self.pdb_data = {}
         self.side_chains = self.cfg.data.get('side_chains', False)
         # parse all PDBs first - treat each row as its own PDB
@@ -336,9 +348,9 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
             pdb_file = os.path.join(self.pdb_dir, f"{fname}.pdb")
             chain = [row.PDB[-1]]
             pdb = alt_parse_PDB(pdb_file, input_chain_list=chain, side_chains=self.side_chains)
-            
+
             self.pdb_data[i] = pdb[0]
-            
+
     def __len__(self):
         return len(self.pdb_data)
 
@@ -352,10 +364,10 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
             mut_info = row.MUTS
 
             if ('ptmul' in self.cfg.data.dataset) and ('double' not in self.cfg.data.mut_types):
-                if len(mut_info.split(';')) < 3: # skip double mutants if missing
+                if len(mut_info.split(';')) < 3:  # skip double mutants if missing
                     return
             if ('ptmul' in self.cfg.data.dataset) and ('higher' not in self.cfg.data.mut_types):
-                if len(mut_info.split(';')) > 2: # skip higher order mutants if missing
+                if len(mut_info.split(';')) > 2:  # skip higher order mutants if missing
                     return
 
             # hack to run additive model on multi mutant datasets
@@ -375,19 +387,19 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
 
         if not self.rev:
             for mt in mut_info.split(';'):  # handle multiple mutations like for megascale
-                
+
                 wtAA, mutAA = mt[0], mt[-1]
                 ddG = float(row.DDG) * -1
-                
-                pdb = deepcopy(pdb_CANONICAL)      
+
+                pdb = deepcopy(pdb_CANONICAL)
                 pdb_idx = self._get_pdb_idx(mt, pdb_CANONICAL)
                 assert pdb['seq'][pdb_idx] == wtAA
-                
+
                 wt_list.append(wtAA)
                 mut_list.append(mutAA)
                 idx_list.append(pdb_idx)
                 pdb['mutation'] = Mutation(idx_list, wt_list, mut_list, ddG, row.PDB[:-1])
-                
+
         else:  # reverse mutations - retrieve Rosetta/modeled structures
             fname = row.PDB[:-1]
             chain = row.PDB[-1]
@@ -397,20 +409,21 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
             # print(f"{fname}{chain}_{wtAA}{old_idx}{mutAA}_relaxed.pdb")
             pdb_file = os.path.join(self.pdb_dir, f"{fname}{chain}_{wtAA}{old_idx}{mutAA}_relaxed.pdb")
             pdb = alt_parse_PDB(pdb_file, input_chain_list=chain, side_chains=self.side_chains)[0]
-            
-            pdb_idx = self._get_pdb_idx(mut_info, pdb_CANONICAL)  
+
+            pdb_idx = self._get_pdb_idx(mut_info, pdb_CANONICAL)
             assert pdb['seq'][pdb_idx] == mutAA
-            
+
             pdb['mutation'] = Mutation([pdb_idx], [mutAA], [wtAA], ddG * -1, row.PDB[:-1])
-        
+
         # if needed, update wt seq to match passed mutations
         seq_keys = [k for k in pdb.keys() if k.startswith('seq')]
         if len(seq_keys) > 2:
-            raise ValueError("Maximum of 2 seq fields expected in PDB, %s seq fields found instead" % str(len(seq_keys)))
+            raise ValueError("Maximum of 2 seq fields expected in PDB, %s seq fields found instead" %
+                             str(len(seq_keys)))
         for sk in seq_keys:
             tmp = [p for p in pdb[sk]]
             tmp[pdb_idx] = wtAA
-            pdb[sk] = ''.join(tmp)   
+            pdb[sk] = ''.join(tmp)
 
         tmp = deepcopy(pdb)  # this is hacky but it is needed or else it overwrites all PDBs with the last data point
         return tmp
@@ -421,7 +434,7 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
         try:
             pos = mut_info[1:-1]
             pdb_idx = pdb['resn_list'].index(pos)
-            
+
         except ValueError:  # skip positions with insertion codes for now - hard to parse
             raise ValueError('NO PDB IDX FOUND - insertion code')
         try:
@@ -430,7 +443,8 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
             # if gaps are present, add these to idx (+10 to get any around the mutation site, very much an ugly hack)
             if 'S669' in self.pdb_dir:
                 gaps = [g for g in pdb['seq'] if g == '-']
-            elif ('PTMUL' in self.pdb_dir) and ('1YCC' in pdb['name']) and ('T69E' == mut_info):  # bad case w/negative bits
+            # bad case w/negative bits
+            elif ('PTMUL' in self.pdb_dir) and ('1YCC' in pdb['name']) and ('T69E' == mut_info):
                 gaps = ['-']
             elif ('PTMUL' in self.pdb_dir) and ('1QJP' in pdb['name'] and int(mut_info[1:-1]) > 150):
                 gaps = ['-'] * 34
@@ -444,9 +458,9 @@ class ddgBenchDatasetv2(torch.utils.data.Dataset):
                     gaps = ['-'] * 9
                 if int(mut_info[1:-1]) == 209:
                     gaps = ['-'] * 28
-                    
+
             else:
-                gaps = [g for g in pdb['seq'][:pdb_idx + 10] if g == '-']                
+                gaps = [g for g in pdb['seq'][:pdb_idx + 10] if g == '-']
 
             if len(gaps) > 0:
                 pdb_idx += len(gaps)
@@ -475,8 +489,9 @@ class FireProtDatasetv2(torch.utils.data.Dataset):
 
         # load splits produced by mmseqs clustering
         with open(self.cfg.data_loc.fireprot_splits, 'rb') as f:
-            splits = pickle.load(f)  # this is a dict with keys train/val/test and items holding FULL PDB names for a given split
-    
+            # this is a dict with keys train/val/test and items holding FULL PDB names for a given split
+            splits = pickle.load(f)
+
         self.wt_names = splits[self.split]
 
         self.df = self.df.loc[self.df.pdb_id_corrected.isin(self.wt_names)].reset_index(drop=True)
@@ -489,13 +504,12 @@ class FireProtDatasetv2(torch.utils.data.Dataset):
             pdb_file = os.path.join(self.cfg.data_loc.fireprot_pdbs, f"{wt_name}.pdb")
             pdb = parse_PDB(pdb_file, side_chains=self.side_chains)
             self.pdb_data[wt_name] = pdb[0]
-        
+
     def __len__(self):
         return self.df.shape[0]
 
     def __getitem__(self, index):
 
-        pdb_list = []
         row = self.df.iloc[index]
         # load PDB and correct seq as needed
         wt_name = row.pdb_id_corrected.rstrip('.pdb')
@@ -504,7 +518,7 @@ class FireProtDatasetv2(torch.utils.data.Dataset):
         try:
             pdb_idx = row.pdb_position
             assert pdb['seq'][pdb_idx] == row.wild_type == row.pdb_sequence[row.pdb_position]
-            
+
         except AssertionError:  # contingency for mis-alignments
             align, *rest = pairwise2.align.globalxx(row.pdb_sequence, pdb['seq'].replace("-", "X"))
             pdb_idx = seq1_index_to_seq2_index(align, row.pdb_position)
@@ -513,7 +527,7 @@ class FireProtDatasetv2(torch.utils.data.Dataset):
 
         ddG = float(row.ddG)
         mut = Mutation([pdb_idx], [pdb['seq'][pdb_idx]], [row.mutation], ddG, wt_name)
-        
+
         pdb['mutation'] = mut
         tmp = deepcopy(pdb)  # this is hacky but it is needed or else it overwrites all PDBs with the last data point
         return tmp
@@ -529,14 +543,14 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
 
         if ('cdna' in self.split) or ('denovo' in self.split):
             # load ME dataset through separate process to ensure compatibility
-            if self.split == 'train_cdna': # combined training set
+            if self.split == 'train_cdna':  # combined training set
                 fname = '/home/hdieckhaus/scripts/ThermoMPNN/data/cdna_mutate_everything/cdna_train.csv'
                 df = pd.read_csv(fname)
-            elif self.split == 'test_cdna': # combined test set
+            elif self.split == 'test_cdna':  # combined test set
                 fname1 = '/home/hdieckhaus/scripts/ThermoMPNN/data/cdna_mutate_everything/cdna1_test.csv'
                 fname2 = '/home/hdieckhaus/scripts/ThermoMPNN/data/cdna_mutate_everything/cdna2_test.csv'
                 df = pd.concat([
-                    pd.read_csv(fname1), 
+                    pd.read_csv(fname1),
                     pd.read_csv(fname2)
                 ])
                 df['WT_name'] = df['pdb_id'].str.upper() + '.pdb'
@@ -546,16 +560,15 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
                 fname1 = '/home/hdieckhaus/scripts/ThermoMPNN/data/cdna_mutate_everything/denovo_singles.csv'
                 fname2 = '/home/hdieckhaus/scripts/ThermoMPNN/data/cdna_mutate_everything/denovo_doubles.csv'
                 df = pd.concat([
-                    pd.read_csv(fname1), 
+                    pd.read_csv(fname1),
                     pd.read_csv(fname2)
                 ])
                 df['WT_name'] = df['pdb_id'] + '.pdb'
                 df['ddG_ML'] = df['ddg'] * -1
 
-                            
             # convert columns to expected names/formats
             df['aa_seq'] = df['mut_seq']
-            
+
             df['mut_type'] = df['mut_info']
 
             # select singles/doubles
@@ -578,7 +591,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
             self.side_chains = self.cfg.data.get('side_chains', False)
             self.pdb_data = {}
             for wt_name in tqdm(self.wt_names):
-                wt_name = wt_name.split(".pdb")[0].replace("|",":")
+                wt_name = wt_name.split(".pdb")[0].replace("|", ":")
                 pdb_file = os.path.join(self.cfg.data_loc.megascale_pdbs, f"{wt_name}.pdb")
                 pdb = parse_PDB(pdb_file, side_chains=self.side_chains)
                 self.pdb_data[wt_name] = pdb[0]
@@ -599,11 +612,13 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
 
             mut_list = []
             if 'single' in self.cfg.data.mut_types:
-                mut_list.append(df.loc[~df.mut_type.str.contains(":") & ~df.mut_type.str.contains("wt"), :].reset_index(drop=True))
-            
+                mut_list.append(df.loc[~df.mut_type.str.contains(":") & ~
+                                df.mut_type.str.contains("wt"), :].reset_index(drop=True))
+
             if 'double' in self.cfg.data.mut_types:
-                tmp = df.loc[(df.mut_type.str.count(":") == 1) & (~df.mut_type.str.contains("wt")), :].reset_index(drop=True)
-                
+                tmp = df.loc[(df.mut_type.str.count(":") == 1) & (
+                    ~df.mut_type.str.contains("wt")), :].reset_index(drop=True)
+
                 # Remove hidden single mutations
                 mut = tmp.mut_type.values
                 mut1 = [m.split(':')[0] for m in mut]
@@ -614,9 +629,9 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
                 tmp['dupe'] = tmp['WT_name'] + '_' + tmp['mut_type']
                 tmp = tmp.drop_duplicates(subset=['dupe']).reset_index(drop=True)
                 mut_list.append(tmp)
-                
+
             self.df = pd.concat(mut_list, axis=0).reset_index(drop=True)  # this includes points missing structure data
-            
+
             # load splits produced by mmseqs clustering
             with open(self.cfg.data_loc.megascale_splits, 'rb') as f:
                 splits = pickle.load(f)
@@ -627,14 +642,14 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
             self.side_chains = self.cfg.data.get('side_chains', False)
             self.pdb_data = {}
             for wt_name in tqdm(self.wt_names):
-                wt_name = wt_name.split(".pdb")[0].replace("|",":")
+                wt_name = wt_name.split(".pdb")[0].replace("|", ":")
                 pdb_file = os.path.join(self.cfg.data_loc.megascale_pdbs, f"{wt_name}.pdb")
                 pdb = parse_PDB(pdb_file, side_chains=self.side_chains)
                 self.pdb_data[wt_name] = pdb[0]
 
             # filter df for only data with structural data
             self.df = self.df.loc[self.df.WT_name.isin(self.wt_names)].reset_index(drop=True)
-            
+
             df_list = []
             # pick which mutations to use (data augmentation)
             if ('single' in self.cfg.data.mut_types) or ('double' in self.cfg.data.mut_types):
@@ -642,23 +657,23 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
                 self.df['DIRECT'] = True
                 self.df['wt_orig'] = self.df['mut_type'].str[0]  # mark original WT for file loading use
                 df_list.append(self.df)
-                
+
             if 'double-aug' in cfg.data.mut_types:
                 # grab single mutants even if not included in mutation type list
                 tmp = df.loc[~df.mut_type.str.contains(":") & ~df.mut_type.str.contains("wt"), :].reset_index(drop=True)
-                tmp = tmp.loc[tmp.WT_name.isin(self.wt_names)].reset_index(drop=True) # filter by split
-                
+                tmp = tmp.loc[tmp.WT_name.isin(self.wt_names)].reset_index(drop=True)  # filter by split
+
                 double_aug = self._augment_double_mutants(tmp, c=1)
                 print('Generated %s augmented double mutations' % str(double_aug.shape[0]))
                 double_aug['DIRECT'] = False
                 self.tmp = tmp
                 df_list.append(double_aug)
-            
+
             if self.split == 'test':
                 self.df = pd.concat(df_list, axis=0).reset_index(drop=True)
             else:
                 self.df = pd.concat(df_list, axis=0).sort_values(by='WT_name').reset_index(drop=True)
-            
+
             epi = cfg.data.epi if 'epi' in cfg.data else False
             if epi:
                 self._generate_epi_dataset()
@@ -674,7 +689,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
         row = self.df.iloc[index]
 
         pdb_loc = self.cfg.data_loc.rosetta_data
-        wt_name = row.WT_name.rstrip(".pdb").replace("|",":")
+        wt_name = row.WT_name.rstrip(".pdb").replace("|", ":")
         chain = 'A'  # all Rocklin proteins have chain A, since they're AF2 models
 
         mt = row.mut_type
@@ -682,18 +697,19 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
 
         if self.cfg.data.get('pick', None) is not None:
             pick = self.cfg.data.get('pick', None)
-            mt = row.mut_type.split(':')[pick] # hacky way of running additive model on multi mutant datasets - takes the Nth mutation only
+            # hacky way of running additive model on multi mutant datasets - takes the Nth mutation only
+            mt = row.mut_type.split(':')[pick]
 
-        if len(mt.split(':')) > 1: # double
+        if len(mt.split(':')) > 1:  # double
             wt_list, pos_list, mut_list = [], [], []
             for m in mt.split(':'):
                 wt_list.append(m[0])
                 pos_list.append(int(m[1:-1]) - 1)
                 mut_list.append(m[-1])
-            if direct: # double
+            if direct:  # double
                 pdb = self.pdb_data[row.WT_name.removesuffix('.pdb')]
-                
-            else: # double-rev
+
+            else:  # double-rev
                 # need to flip the wt and mutant AAs for file retrieval
                 wt_ros = mut_list[0]
                 pos_ros = pos_list[0] + 1
@@ -704,7 +720,11 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
                 else:
                     pt_tag = ''
 
-                pt_file = os.path.join(pdb_loc, wt_name, 'pdb_models', f'{chain}[{wt_ros}{pos_ros}{mut_ros}{pt_tag}].pt')
+                pt_file = os.path.join(
+                    pdb_loc,
+                    wt_name,
+                    'pdb_models',
+                    f'{chain}[{wt_ros}{pos_ros}{mut_ros}{pt_tag}].pt')
                 # if pt exists, it's way faster to load than using the pdb parser
                 if os.path.isfile(pt_file):
                     pdb = torch.load(pt_file)
@@ -718,18 +738,19 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
             wt_list = [mt[0]]
             mut_list = [mt[-1]]
             pos_list = [int(mt[1:-1]) - 1]
-            if direct: # single
+            if direct:  # single
                 pdb = self.pdb_data[row.WT_name.removesuffix('.pdb')]
-                
-            else: # single-rev
-                pdb_file = os.path.join(pdb_loc, 
-                                        wt_name, 
-                                        'pdb_models', 
+
+            else:  # single-rev
+                pdb_file = os.path.join(pdb_loc,
+                                        wt_name,
+                                        'pdb_models',
                                         f'{chain}[{mut_list[0]}{pos_list[0] + 1}{wt_list[0]}].pdb')
                 assert os.path.isfile(pdb_file)  # check that file exists
                 pdb = parse_PDB(pdb_file, side_chains=self.side_chains)[0]
-                                
-        tmp_pdb = deepcopy(pdb) # this is hacky but it is needed or else it overwrites all PDBs with the last data point
+
+        # this is hacky but it is needed or else it overwrites all PDBs with the last data point
+        tmp_pdb = deepcopy(pdb)
 
         ddG = -1 * float(row.ddG_ML)
         tmp_pdb['mutation'] = Mutation(pos_list, wt_list, mut_list, ddG, row.WT_name)
@@ -760,7 +781,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
         for un in np.unique(wtns):
             chunk = wtns == un
             chunks[un] = chunk
-        
+
         for pos in np.unique(positions):
             chunk = positions == pos
             pchunks[pos] = chunk
@@ -770,7 +791,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
             print('Range weighted augmentation enabled!')
             ddg_dist = new_df.loc[~new_df.mut_type.str.contains(':')]
             ddg_dist = ddg_dist.ddG_ML.values.astype(float)
-            all_probs = ddg_dist * -1 # linear weighting - higher ddg means lower weight
+            all_probs = ddg_dist * -1  # linear weighting - higher ddg means lower weight
             all_probs = all_probs - min(all_probs)
             all_probs = all_probs ** int(self.cfg.data.range)  # range coefficient is exponential scaler
 
@@ -791,7 +812,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
                 probs = probs / np.sum(probs)
             else:
                 probs = None
-                
+
             chosen = np.random.choice(np.arange(options.size), size=c, p=probs)
 
             for ch in chosen:
@@ -803,7 +824,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
 
                 mutation_list.append(new_mut)
                 ddg_list.append(new_ddg)
-        
+
         # parse out offset values
         tmp_df = new_df.copy(deep=True)
         df_list = []
@@ -828,59 +849,59 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
         doubles = self.df.loc[self.df.mut_type.str.count(':') == 1].reset_index(drop=True)
 
         doubles[['mut1', 'mut2']] = doubles.mut_type.str.split(':', n=1, expand=True)
-        
+
         mut1 = doubles.mut1.values
         mut2 = doubles.mut2.values
-        
+
         wtns = doubles.WT_name.values
         ddgs = doubles.ddG_ML.values.astype(float)
         bias_list = []
-        additive, ddg1s, ddg2s = [], [] ,[]
+        additive, ddg1s, ddg2s = [], [], []
         singles.ddG_ML = singles.ddG_ML.astype(float)
-        
+
         chunks, m1chunks, m2chunks = {}, {}, {}
         sing_wtns = singles.WT_name.values
         sing_mut = singles.mut_type.values
-        
+
         # do sweep for masks only ONCE
         for un in np.unique(wtns):
             chunk = sing_wtns == un
             chunks[un] = chunk
-        
+
         for pos in np.unique(mut1):
             chunk = sing_mut == pos
             m1chunks[pos] = chunk
-        
+
         for pos in np.unique(mut2):
             chunk = sing_mut == pos
             m2chunks[pos] = chunk
-            
+
         # TODO grab additive equivalent for every double mutant
         for m1, m2, p, d in tqdm(zip(mut1, mut2, wtns, ddgs)):
             # grab each separate ddg based on PDB + mut_type matches
             mask = chunks[p] * m1chunks[m1]
             options = singles.loc[mask]
-            
+
             mask2 = chunks[p] * m2chunks[m2]
             options2 = singles.loc[mask2]
-            
+
             if options.shape[0] == 0:
                 ddg1 = 0
             else:
                 ddg1 = options.ddG_ML.values[0]
-            
+
             if options2.shape[0] == 0:
                 ddg2 = 0
             else:
                 ddg2 = options2.ddG_ML.values[0]
-            
+
             # calculate bias term from ddg1+2
-            if (ddg1 == 0) or (ddg2 == 0): # if one or both single ddgs are missing, drop the data point (can't calculate epi score)
+            if (ddg1 == 0) or (ddg2 == 0):  # if one or both single ddgs are missing, drop the data point (can't calculate epi score)
                 bias = -np.inf
             else:
                 bias = d - (ddg1 + ddg2)
             add = ddg1 + ddg2
-    
+
             bias_list.append(bias)
             additive.append(add)
             ddg2s.append(ddg2)
@@ -894,28 +915,29 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
         doubles = doubles.loc[doubles.ddG_ML != -np.inf].reset_index(drop=True)
         self.df = doubles
         return
-    
+
     def _add_reverse_mutations(self):
         # for each mutation, add row w/opposite ddG sign + flipped seq, wt, mut, etc.
         flipped_df = self.df.copy(deep=True)
         # grab flipped mut/wt - DO NOT just reverse the string, this will break the numbering
-        flipped_df['mut_type'] = flipped_df['mut_type'].str[-1] + flipped_df['mut_type'].str[1:-1] + flipped_df['mut_type'].str[0]
+        flipped_df['mut_type'] = flipped_df['mut_type'].str[-1] + \
+            flipped_df['mut_type'].str[1:-1] + flipped_df['mut_type'].str[0]
         flipped_df['ddG_ML'] = flipped_df['ddG_ML'].astype(float) * -1
         # flip WT sequence value as well
         flipped_df['pos'] = flipped_df['mut_type'].str[1:-1].astype(int) - 1
         flipped_df['mut'] = flipped_df['mut_type'].str[-1]
-        
+
         def flip_string(x):
             tmp = [s for s in x['aa_seq']]
             tmp[x['pos']] = x['mut']
             return ''.join(tmp)
-        
+
         flipped_df['aa_seq'] = flipped_df.apply(lambda x: flip_string(x), axis=1)
         flipped_df = flipped_df.drop(labels=['pos', 'mut'], axis='columns')
         return flipped_df
 
     def _add_permuted_mutations(self):
-        
+
         def permute_subset(chunk):
             """generate permutations of a given df chunk"""
             # check only one wt AA is present
@@ -925,7 +947,7 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
             assert len(chunk['wt'].unique()) == 1
             # retrieve all mutant AAs
             chunk['mut'] = chunk['mut_type'].str[-1]
-            
+
             # generate every possible permutation of N mutations (N * (N-1) combinations)
             all_combos = [p for p in permutations(iter(chunk['mut']), r=2)]
             # sometimes there is no combo
@@ -935,13 +957,13 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
 
             # unpack and calulate new ddGs
             aa_seqs = []
-            
+
             new_df = pd.DataFrame({'wt': wt, 'mut': mut})
             new_df['mut_type'] = new_df.wt + str(pos) + new_df.mut
 
             # correct aa seq to reflect new values
             aa_seq = chunk.aa_seq.values[0]
-            
+
             aa_seqs = []
             for t in new_df['wt']:
                 tmp = [p for p in aa_seq]
@@ -951,14 +973,14 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
                 assert aa_seq[pos - 1] == t[0]
 
             new_df['aa_seq'] = aa_seqs
-            
+
             # get aa-to-index values from chunk df
             wt = chunk['mut']
             ix = chunk.index
             decode = {}
             for w, i in zip(wt, ix):
                 decode[w] = i
-            
+
             wt_idx_list = [decode[aa] for aa in new_df['wt'].values]
             mut_idx_list = [decode[aa] for aa in new_df['mut'].values]
 
@@ -971,12 +993,12 @@ class MegaScaleDatasetv2(torch.utils.data.Dataset):
             new_df['pos'] = pos
             new_df['WT_name'] = wt_name
             return new_df
-        
+
         permuted_df = self.df.copy(deep=True)
-        
+
         permuted_df['pos'] = permuted_df['mut_type'].str[1:-1].astype(int)
         permuted_df = permuted_df.groupby(["WT_name", "pos"], group_keys=False).apply(lambda x: permute_subset(x))
-        
+
         return permuted_df
 
     def _refresh_dataset(self):
@@ -1004,7 +1026,7 @@ class ProteinGymDataset(torch.utils.data.Dataset):
         self.wt_seqs = {}
         self.mut_rows = {}
         self.wt_names = df.PDB.unique()
-                 
+
         self.pdb_data = {}
         self.side_chains = self.cfg.data.get('side_chains', False)
         # parse all PDBs first - treat each row as its own PDB
@@ -1015,7 +1037,7 @@ class ProteinGymDataset(torch.utils.data.Dataset):
             chain = [p[-1]]
             pdb = alt_parse_PDB(pdb_file, input_chain_list=chain, side_chains=self.side_chains)
             self.pdb_data[p] = pdb[0]
-            
+
     def __len__(self):
         return self.df.shape[0]
 
@@ -1044,14 +1066,14 @@ class ProteinGymDataset(torch.utils.data.Dataset):
             return
 
         for mt in mut_info.split(';'):  # handle multiple mutations like for megascale
-            
+
             wtAA, mutAA = mt[0], mt[-1]
             ddG = float(row.DDG) * -1
-            
-            pdb = deepcopy(pdb_CANONICAL)      
+
+            pdb = deepcopy(pdb_CANONICAL)
             pdb_idx = int(mt[1:-1]) - 1
             assert pdb['seq'][pdb_idx] == wtAA
-            
+
             wt_list.append(wtAA)
             mut_list.append(mutAA)
             idx_list.append(pdb_idx)
@@ -1068,10 +1090,10 @@ def prebatch_dataset(dataset, workers=1):
     print('Number of workers:', workers)
 
     loader = DataLoader(dataset, collate_fn=lambda x: x, shuffle=False, num_workers=0, batch_size=1)
-    
+
     for batch in tqdm(loader):
         pass
-    
+
     return
 
 # if __name__ == "__main__":
@@ -1091,4 +1113,3 @@ def prebatch_dataset(dataset, workers=1):
 #         ds = MegaScaleDatasetv2(cfg, split=split)
 #         print(ds.df)
 #         ds.df.to_csv(f'Prefetch_Mega_{split}_{seed}.csv')
-    

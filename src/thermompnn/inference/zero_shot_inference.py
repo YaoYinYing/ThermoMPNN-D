@@ -1,13 +1,15 @@
-import torch
 import argparse
-from omegaconf import OmegaConf
-import pandas as pd
 import os
 
-from thermompnn.inference.v2_inference import load_v2_dataset, run_prediction_batched
+import pandas as pd
+import torch
+from omegaconf import OmegaConf
 from protein_mpnn_utils import ProteinMPNN
-from thermompnn.trainer.v2_trainer import TransferModelPLv2
 from train_thermompnn import parse_cfg
+
+from thermompnn.inference.v2_inference import (load_v2_dataset,
+                                               run_prediction_batched)
+from thermompnn.trainer.v2_trainer import TransferModelPLv2
 
 
 def inference(cfg, args):
@@ -23,19 +25,19 @@ def inference(cfg, args):
     # load ProteinMPNN baseline model (DEPENDS on config settings)
     if args.transfer:
         model = TransferModelPLv2.load_from_checkpoint(args.model, cfg=cfg, map_location=device).model
-        
+
     else:
         ckpt_path = args.model
         ckpt = torch.load(ckpt_path, map_location=torch.device('cpu'))
         num_edges = ckpt['num_edges']
-        
-        model = ProteinMPNN(node_features=args.hidden_dim, 
-                            edge_features=args.hidden_dim, 
-                            hidden_dim=args.hidden_dim, 
-                            num_encoder_layers=args.num_encoder_layers, 
-                            num_decoder_layers=args.num_decoder_layers, 
-                            k_neighbors=num_edges, 
-                            dropout=0.0, 
+
+        model = ProteinMPNN(node_features=args.hidden_dim,
+                            edge_features=args.hidden_dim,
+                            hidden_dim=args.hidden_dim,
+                            num_encoder_layers=args.num_encoder_layers,
+                            num_decoder_layers=args.num_decoder_layers,
+                            k_neighbors=num_edges,
+                            dropout=0.0,
                             augment_eps=0.0,
                             vocab=21,
                             num_letters=21,
@@ -67,9 +69,17 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help='path to model weights file (pt file)', type=str, default='checkpoint.ckpt')
-    parser.add_argument('--local', help='local config file for data storage locations', type=str, default='../local.yaml')
+    parser.add_argument(
+        '--local',
+        help='local config file for data storage locations',
+        type=str,
+        default='../local.yaml')
     parser.add_argument('--config', help='local config file for param info', type=str, default='../config.yaml')
-    parser.add_argument('--dec_order', help='decoding order to pass to the zero-shot model', type=str, default='autoreg')
+    parser.add_argument(
+        '--dec_order',
+        help='decoding order to pass to the zero-shot model',
+        type=str,
+        default='autoreg')
     parser.add_argument('--hidden_dim', help='model hidden dim', type=int, default=128)
     parser.add_argument('--num_encoder_layers', help='encoder layers', type=int, default=3)
     parser.add_argument('--num_decoder_layers', help='decoder layers', type=int, default=3)

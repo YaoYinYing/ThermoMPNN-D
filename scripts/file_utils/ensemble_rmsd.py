@@ -1,10 +1,10 @@
 import argparse
 import os
+
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
-
 from Bio.PDB import PDBParser, Superimposer
+from tqdm import tqdm
 
 
 def get_Ca_atoms(ref_model, alt_model):
@@ -18,9 +18,10 @@ def get_Ca_atoms(ref_model, alt_model):
                 a = alt_res['CA']
             except KeyError:
                 continue
-            ref_atoms.append(r)    
+            ref_atoms.append(r)
             alt_atoms.append(a)
     return ref_atoms, alt_atoms
+
 
 def calculate_rmsd(prot1, prot2, pdbparser, superimposer, pdb_dir):
     """Calculate pairwise Ca-Ca RMSD for two proteins"""
@@ -30,6 +31,7 @@ def calculate_rmsd(prot1, prot2, pdbparser, superimposer, pdb_dir):
     superimposer.set_atoms(ref, alt)
     # print(prot1, prot2, superimposer.rms)
     return superimposer.rms
+
 
 def main(args):
     """Calculates all-vs-all RMSD for NMR ensemble models"""
@@ -44,7 +46,7 @@ def main(args):
     for pre in tqdm(prefixes):
         ensemble_members = [p for p in pdbs if pre in p]
         rms_all = []
-        print('%s ensemble members for protein %s' % (len(ensemble_members), pre))
+        print('{} ensemble members for protein {}'.format(len(ensemble_members), pre))
         for ens1 in ensemble_members:
             for ens2 in ensemble_members:
                 if ens1 != ens2:
@@ -52,7 +54,7 @@ def main(args):
         single_rms.append(np.mean(rms_all))
         print(round(np.mean(rms_all), 4))
         members.append(len(ensemble_members))
-    
+
     df = pd.DataFrame({'PDB': prefixes, 'Ensemble RMSD': single_rms, 'Ensemble Members': members})
     df.to_csv(args.output)
     print(df.head)
@@ -61,9 +63,9 @@ def main(args):
 
 
 if __name__ == "__main__":
-    
+
     parser = argparse.ArgumentParser()
     parser.add_argument('--pdbs', help='directory of PDBs to calculate', default='./')
     parser.add_argument('--output', help='output csv to save', default='./ensemble_rmsd.csv')
-    
+
     main(parser.parse_args())

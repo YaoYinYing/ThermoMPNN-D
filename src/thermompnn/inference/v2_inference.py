@@ -1,12 +1,16 @@
-import torch
-from torch.utils.data import DataLoader
-
 import os
-from tqdm import tqdm
+
 import numpy as np
 import pandas as pd
+import torch
+from torch.utils.data import DataLoader
+from tqdm import tqdm
 
-from thermompnn.datasets.v2_datasets import MegaScaleDatasetv2, FireProtDatasetv2, ddgBenchDatasetv2, tied_featurize_mut, ProteinGymDataset
+from thermompnn.datasets.v2_datasets import (FireProtDatasetv2,
+                                             MegaScaleDatasetv2,
+                                             ProteinGymDataset,
+                                             ddgBenchDatasetv2,
+                                             tied_featurize_mut)
 from thermompnn.inference.inference_utils import get_metrics_full
 from thermompnn.model.v2_model import batched_index_select
 
@@ -22,15 +26,19 @@ def run_prediction_batched(name, model, dataset_name, dataset, results, keep=Tru
     }
     for m in metrics['ddG'].values():
         m = m.to(device)
-    
+
     model = model.eval()
     model = model.cuda()
-    
-    print('Testing Model %s on dataset %s' % (name, dataset_name))
+
+    print('Testing Model {} on dataset {}'.format(name, dataset_name))
     preds, ddgs = [], []
 
-    loader = DataLoader(dataset, collate_fn=lambda b: tied_featurize_mut(b, side_chains=cfg.data.get('side_chains', False)), 
-                        shuffle=False, num_workers=cfg.training.get('num_workers', 8), batch_size=cfg.training.get('batch_size', 256))
+    loader = DataLoader(
+        dataset, collate_fn=lambda b: tied_featurize_mut(
+            b, side_chains=cfg.data.get(
+                'side_chains', False)), shuffle=False, num_workers=cfg.training.get(
+            'num_workers', 8), batch_size=cfg.training.get(
+                    'batch_size', 256))
 
     batches = []
     for i, batch in enumerate(tqdm(loader)):
@@ -53,10 +61,12 @@ def run_prediction_batched(name, model, dataset_name, dataset, results, keep=Tru
 
         if cfg.model.get('aggregation', '') == 'siamese':
             # average both siamese network passes
-            predA, predB = model(X, S, mask, chain_M, residue_idx, chain_encoding_all, mut_positions, mut_wildtype_AAs, mut_mutant_AAs, mut_ddGs, atom_mask)
+            predA, predB = model(X, S, mask, chain_M, residue_idx, chain_encoding_all,
+                                 mut_positions, mut_wildtype_AAs, mut_mutant_AAs, mut_ddGs, atom_mask)
             pred = torch.mean(torch.cat([predA, predB], dim=-1), dim=-1)
         elif not zero_shot:
-            pred, _ = model(X, S, mask, chain_M, residue_idx, chain_encoding_all, mut_positions, mut_wildtype_AAs, mut_mutant_AAs, mut_ddGs, atom_mask)
+            pred, _ = model(X, S, mask, chain_M, residue_idx, chain_encoding_all, mut_positions,
+                            mut_wildtype_AAs, mut_mutant_AAs, mut_ddGs, atom_mask)
         else:
             # non-epistatic (single mut) zero-shot
             pred = model(X, S, mask, chain_M, residue_idx, chain_encoding_all)[-2]
@@ -77,37 +87,37 @@ def run_prediction_batched(name, model, dataset_name, dataset, results, keep=Tru
 
         if max_batches is not None and i >= max_batches:
             break
-        
+
         preds += list(torch.squeeze(pred, dim=-1).detach().cpu())
         ddgs += list(torch.squeeze(mut_ddGs, dim=-1).detach().cpu())
-        batches += [i for p in range(len(pred))]   
-    
+        batches += [i for p in range(len(pred))]
+
     print('%s mutations evaluated' % (str(len(ddgs))))
-    
+
     if keep:
         preds, ddgs = np.squeeze(preds), np.squeeze(ddgs)
 
         if 'megascale' in dataset_name:
-            tmp = pd.DataFrame({'ddG_pred': preds, 
-            'ddG_true': ddgs, 
-            'batch': batches, 
-            'mut_type': dataset.df.mut_type, 
-            'WT_name': dataset.df.WT_name})
+            tmp = pd.DataFrame({'ddG_pred': preds,
+                                'ddG_true': ddgs,
+                                'batch': batches,
+                                'mut_type': dataset.df.mut_type,
+                                'WT_name': dataset.df.WT_name})
 
         else:
-            if 'ptmul' in dataset_name: # manually correct for subset inference df size mismatch
+            if 'ptmul' in dataset_name:  # manually correct for subset inference df size mismatch
                 dataset.df = dataset.df.loc[dataset.df.NMUT < 3].reset_index(drop=True)
-                tmp = pd.DataFrame({'ddG_pred': preds, 
-                'ddG_true': ddgs, 
-                'batch': batches, 
-                'mut_type': dataset.df.MUTS, 
-                'WT_name': dataset.df.PDB})
-        
+                tmp = pd.DataFrame({'ddG_pred': preds,
+                                    'ddG_true': ddgs,
+                                    'batch': batches,
+                                    'mut_type': dataset.df.MUTS,
+                                    'WT_name': dataset.df.PDB})
+
             elif 'proteingym' in dataset_name:
-                tmp = pd.DataFrame({'ddG_pred': preds, 
-                                    'ddG_true': ddgs, 
-                                    'batch': batches, 
-                                    'mut_type': dataset.df.MUTS, 
+                tmp = pd.DataFrame({'ddG_pred': preds,
+                                    'ddG_true': ddgs,
+                                    'batch': batches,
+                                    'mut_type': dataset.df.MUTS,
                                     'WT_name': dataset.df.PDB})
 
             else:
@@ -136,8 +146,8 @@ def load_v2_dataset(cfg):
     """Parses input config and sets up proper dataset for INFERENCE only"""
 
     ds_all = {
-        'megascale': MegaScaleDatasetv2,  
-        'fireprot': FireProtDatasetv2, 
+        'megascale': MegaScaleDatasetv2,
+        'fireprot': FireProtDatasetv2,
         'ddgbench': ddgBenchDatasetv2
     }
     dataset = cfg.data.dataset
@@ -156,11 +166,12 @@ def load_v2_dataset(cfg):
         flip = False
 
         if dataset == 'ptmul':
-            if split != 'dir': # ptmul mutateeverything splits
+            if split != 'dir':  # ptmul mutateeverything splits
                 print('loading ptmul with alternate splits/curation from MutateEverything paper')
                 pdb_loc = os.path.join(cfg.data_loc.misc_data, 'protddg-bench-master/PTMUL/pdbs')
-                csv_loc = os.path.join(cfg.data_loc.misc_data, 'protddg-bench-master/PTMUL/ptmul-5fold-mutateeverything_FINAL.csv')
-            else:    
+                csv_loc = os.path.join(cfg.data_loc.misc_data,
+                                       'protddg-bench-master/PTMUL/ptmul-5fold-mutateeverything_FINAL.csv')
+            else:
                 pdb_loc = os.path.join(cfg.data_loc.misc_data, 'protddg-bench-master/PTMUL/pdbs')
                 csv_loc = os.path.join(cfg.data_loc.misc_data, 'protddg-bench-master/PTMUL/ptmul-5fold.csv')
 
@@ -177,7 +188,7 @@ def load_v2_dataset(cfg):
 def zero_shot_convert(preds, positions, mut_AAs, wt_AAs=None):
     """Convert raw ProteinMPNN log-probs into ddG pseudo-values"""
 
-    # index positions 
+    # index positions
     preds = batched_index_select(preds, 1, positions)
     # index mutAA indices
     mut_logs = batched_index_select(preds, 2, mut_AAs)

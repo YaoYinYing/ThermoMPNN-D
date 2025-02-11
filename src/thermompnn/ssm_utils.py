@@ -1,29 +1,33 @@
 import os
 import re
+from typing import Literal
 
 import numpy as np
 from Bio.PDB import PDBParser
 from omegaconf import OmegaConf
 from scipy.spatial.distance import cdist
-from thermompnn.train_thermompnn import parse_cfg
-from thermompnn.trainer.v2_trainer import TransferModelPLv2, TransferModelPLv2Siamese
 from tqdm import tqdm
 
+from thermompnn.train_thermompnn import parse_cfg
+from thermompnn.trainer.v2_trainer import (TransferModelPLv2,
+                                           TransferModelPLv2Siamese)
+from thermompnn.utils.get_weights import thermompnn_weigths, vanilla_weigths
 
-def get_model(mode, config):
+
+def get_model(mode: Literal['single', 'epistatic'], config):
     cwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+    model_dir = vanilla_weigths.setup()
 
     if (mode.lower() == "single") or (mode.lower() == "additive"):
-        model_path = os.path.join(cwd, "model_weights/ThermoMPNN-ens1.ckpt")
+        model_path = os.path.join(model_dir, "ThermoMPNN-ens1.ckpt")
         return TransferModelPLv2.load_from_checkpoint(model_path, cfg=config).model
 
-    elif mode.lower() == "epistatic":
-        model_path = os.path.join(cwd, "model_weights/ThermoMPNN-D-ens1.ckpt")
+    if mode.lower() == "epistatic":
+        model_path = os.path.join(model_dir, "ThermoMPNN-D-ens1.ckpt")
         return TransferModelPLv2Siamese.load_from_checkpoint(
             model_path, cfg=config
         ).model
-    else:
-        raise ValueError(f"Invalid model mode {mode.lower()} specified")
+    raise ValueError(f"Invalid model mode {mode.lower()} specified")
 
 
 def get_chains(pdb_file, chain_list):
@@ -143,20 +147,20 @@ def custom_parse_PDB_biounits(x, atoms=["N", "CA", "C"], chain=None):
         line = line.decode("utf-8", "ignore").rstrip()
 
         # handling MSE and SEC residues
-        if line[:6] == "HETATM" and line[17 : 17 + 3] == "MSE":
+        if line[:6] == "HETATM" and line[17: 17 + 3] == "MSE":
             line = line.replace("HETATM", "ATOM  ")
             line = line.replace("MSE", "MET")
-        elif line[17 : 17 + 3] == "MSE":
+        elif line[17: 17 + 3] == "MSE":
             line = line.replace("MSE", "MET")
-        elif line[17 : 17 + 3] == "SEC":
+        elif line[17: 17 + 3] == "SEC":
             line = line.replace("SEC", "CYS")
 
         if line[:4] == "ATOM":
             ch = line[21:22]
             if ch == chain or chain is None:
-                atom = line[12 : 12 + 4].strip()
-                resi = line[17 : 17 + 3]
-                resn = line[22 : 22 + 5].strip()
+                atom = line[12: 12 + 4].strip()
+                resi = line[17: 17 + 3]
+                resn = line[22: 22 + 5].strip()
 
                 # Check for gaps and add them if needed
                 if (resn not in resn_list) and len(resn_list) > 0:
@@ -169,7 +173,7 @@ def custom_parse_PDB_biounits(x, atoms=["N", "CA", "C"], chain=None):
                 # RAW resn is defined HERE
                 resn_list.append(resn)  # NEED to keep ins code here
 
-                x, y, z = [float(line[i : (i + 8)]) for i in [30, 38, 46]]
+                x, y, z = (float(line[i: (i + 8)]) for i in [30, 38, 46])
                 if resn[-1].isalpha():
                     resa, resn = resn[-1], int(resn[:-1]) - 1
                 else:
@@ -345,8 +349,9 @@ def custom_parse_PDB(
             )
             if resn_list != "no_chain":
                 my_dict["resn_list_" + letter] = resn_list
-            if type(xyz) != str:
-                concat_seq += seq[0]
+
+
+if not isinstance(xyz,             if )                concat_seq += seq[0]
                 my_dict["seq_chain_" + letter] = seq[0]
                 coords_dict_chain = {}
                 if ca_only:
@@ -366,7 +371,7 @@ def custom_parse_PDB(
                 s += 1
 
         fi = biounit.rfind("/")
-        my_dict["name"] = biounit[(fi + 1) : -4]
+        my_dict["name"] = biounit[(fi + 1): -4]
         my_dict["num_of_chains"] = s
         my_dict["seq"] = concat_seq
         if s <= len(chain_alphabet):

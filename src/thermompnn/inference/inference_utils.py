@@ -1,14 +1,13 @@
-import torch
-from torch import nn
-from torchmetrics import R2Score, MeanSquaredError, SpearmanCorrCoef, PearsonCorrCoef
 
-import argparse
 import omegaconf as OmegaConf
 import pandas as pd
+import torch
+from torch import nn
+from torchmetrics import (MeanSquaredError, PearsonCorrCoef, R2Score,
+                          SpearmanCorrCoef)
 
 from thermompnn.model.modules import get_protein_mpnn
 from thermompnn.protein_mpnn_utils import tied_featurize
-
 
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWYX'
 
@@ -19,11 +18,18 @@ def get_metrics_full():
         "mse": MeanSquaredError(squared=True).to('cuda'),
         "rmse": MeanSquaredError(squared=False).to('cuda'),
         "spearman": SpearmanCorrCoef().to('cuda'),
-        "pearson":  PearsonCorrCoef().to('cuda'),
+        "pearson": PearsonCorrCoef().to('cuda'),
     }
 
 
-def compute_centrality(xyz, basis_atom: str = "CA", radius: float = 10.0, core_threshold: int = 20, surface_threshold: int = 15, backup_atom: str = "C", chain: str = 'A') -> torch.Tensor:
+def compute_centrality(
+        xyz,
+        basis_atom: str = "CA",
+        radius: float = 10.0,
+        core_threshold: int = 20,
+        surface_threshold: int = 15,
+        backup_atom: str = "C",
+        chain: str = 'A') -> torch.Tensor:
     """Expects ProteinMPNN feature dict and returns torch tensor of num_neighbors integers."""
     coords = xyz[basis_atom + f'_chain_{chain}']
     coords = torch.tensor(coords)

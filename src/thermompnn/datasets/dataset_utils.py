@@ -1,7 +1,7 @@
 from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Optional
-
 
 ALPHABET = 'ACDEFGHIKLMNPQRSTVWY-'
 
@@ -26,19 +26,18 @@ def seq1_index_to_seq2_index(align, index):
             cur_seq1_index += 1
         if cur_seq1_index > index:
             break
-    
+
     # now the index in seq 2 cooresponding to aligned index
     if align.seqB[aln_idx] == '-':
         return None
 
-    seq2_to_idx = align.seqB[:aln_idx+1]
+    seq2_to_idx = align.seqB[:aln_idx + 1]
     seq2_idx = aln_idx
     for char in seq2_to_idx:
         if char == '-':
             seq2_idx -= 1
-    
+
     if seq2_idx < 0:
         return None
 
     return seq2_idx
-

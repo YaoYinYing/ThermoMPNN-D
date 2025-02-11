@@ -1,7 +1,8 @@
 import argparse
+import pickle
+
 from Bio.PDB import PDBParser
 from Bio.PDB.DSSP import DSSP
-import pickle
 
 
 def main(args):

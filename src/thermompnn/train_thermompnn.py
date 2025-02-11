@@ -1,16 +1,16 @@
+import os
 import sys
 
-import os
-from torch.utils.data import DataLoader
-
 import pytorch_lightning as pl
+from omegaconf import OmegaConf
 from pytorch_lightning.callbacks import ModelCheckpoint
 from pytorch_lightning.loggers import WandbLogger
-from omegaconf import OmegaConf
+from torch.utils.data import DataLoader
 
-from thermompnn.parsers import get_v2_dataset
-from thermompnn.trainer.v2_trainer import TransferModelPLv2, TransferModelPLv2Siamese
 from thermompnn.datasets.v2_datasets import tied_featurize_mut
+from thermompnn.parsers import get_v2_dataset
+from thermompnn.trainer.v2_trainer import (TransferModelPLv2,
+                                           TransferModelPLv2Siamese)
 
 
 def parse_cfg(cfg):
@@ -53,7 +53,7 @@ def parse_cfg(cfg):
     cfg.model.mutant_embedding = cfg.model.get('mutant_embedding', False)
     cfg.model.alpha = cfg.model.get('alpha', 1.0)
     cfg.model.beta = cfg.model.get('beta', 1.0)
-    
+
     # double mutant model options
     cfg.model.dist = cfg.model.get('dist', False)
     cfg.model.edges = cfg.model.get('edges', False)
@@ -79,26 +79,26 @@ def train(cfg):
 
     train_dataset, val_dataset = get_v2_dataset(cfg)
 
-    train_loader = DataLoader(train_dataset, 
-                                collate_fn=lambda b: tied_featurize_mut(b, side_chains=cfg.data.side_chains), 
-                                shuffle=cfg.training.shuffle, 
-                                num_workers=cfg.training.num_workers, 
-                                batch_size=cfg.training.batch_size)
-    val_loader = DataLoader(val_dataset, 
-                                collate_fn=lambda b: tied_featurize_mut(b, side_chains=cfg.data.side_chains), 
-                                shuffle=False, 
-                                num_workers=cfg.training.num_workers, 
-                                batch_size=cfg.training.batch_size)
+    train_loader = DataLoader(train_dataset,
+                              collate_fn=lambda b: tied_featurize_mut(b, side_chains=cfg.data.side_chains),
+                              shuffle=cfg.training.shuffle,
+                              num_workers=cfg.training.num_workers,
+                              batch_size=cfg.training.batch_size)
+    val_loader = DataLoader(val_dataset,
+                            collate_fn=lambda b: tied_featurize_mut(b, side_chains=cfg.data.side_chains),
+                            shuffle=False,
+                            num_workers=cfg.training.num_workers,
+                            batch_size=cfg.training.batch_size)
 
     if cfg.model.aggregation == 'siamese':
         model_pl = TransferModelPLv2Siamese(cfg)
     else:
         model_pl = TransferModelPLv2(cfg)
-    
+
     # additional params, logging, checkpoints for training
     filename = cfg.name + '_{epoch:02d}_{val_ddG_spearman:.02}'
     monitor = f'val_ddG_spearman'
-    
+
     current_location = os.path.dirname(os.path.realpath(__file__))
     checkpath = os.path.join(current_location, 'checkpoints/')
     if not os.path.isdir(checkpath):
@@ -107,23 +107,23 @@ def train(cfg):
     checkpoint_callback = ModelCheckpoint(monitor=monitor, mode='max', dirpath=checkpath, filename=filename)
     logger = WandbLogger(project=cfg.project, name="test", log_model=False) if cfg.project is not None else None
     n_steps = 100
-    
-    trainer = pl.Trainer(callbacks=[checkpoint_callback], 
-                        logger=logger, 
-                        log_every_n_steps=n_steps, 
-                        max_epochs=cfg.training.epochs,
-                        accelerator=cfg.platform.accel, 
-                        devices=1, 
-                        limit_train_batches=cfg.training.batch_fraction, 
-    )
-    
-    trainer.fit(model_pl, train_loader, val_loader) #, ckpt_path=cfg.training.ckpt)
+
+    trainer = pl.Trainer(callbacks=[checkpoint_callback],
+                         logger=logger,
+                         log_every_n_steps=n_steps,
+                         max_epochs=cfg.training.epochs,
+                         accelerator=cfg.platform.accel,
+                         devices=1,
+                         limit_train_batches=cfg.training.batch_fraction,
+                         )
+
+    trainer.fit(model_pl, train_loader, val_loader)  # , ckpt_path=cfg.training.ckpt)
 
 
 if __name__ == "__main__":
     # config.yaml and local.yaml files are combined to assemble all runtime arguments
     if len(sys.argv) != 3:
         raise ValueError("Need to specify exactly two config files.")
-    
+
     cfg = OmegaConf.merge(OmegaConf.load(sys.argv[1]), OmegaConf.load(sys.argv[2]))
     train(cfg)
