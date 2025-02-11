@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import itertools
-from proteinmpnn.model_utils import IPMPDecoder, IPMPEncoder
+from thermompnn.proteinmpnn.model_utils import IPMPDecoder, IPMPEncoder
 
 
 # A number of functions/classes are adopted from: https://github.com/jingraham/neurips19-graph-protein-design
