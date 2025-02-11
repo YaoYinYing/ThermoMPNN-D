@@ -3,7 +3,6 @@ import argparse
 
 def main(args):
     import os
-    import os.path
     import queue
     import time
     from concurrent.futures import ProcessPoolExecutor
