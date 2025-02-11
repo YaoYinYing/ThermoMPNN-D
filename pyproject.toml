@@ -33,6 +33,7 @@ dependencies = [
     "numpy<2.0.0",
     "scikit-learn",
     "scipy",
+    "matplotlib",
     "hydra-core",
     "omegaconf",
     "platformdirs",
