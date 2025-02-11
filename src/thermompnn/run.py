@@ -1,6 +1,7 @@
 import argparse
 import os
 import time
+from typing import List, Literal, Optional
 
 import numpy as np
 import pandas as pd
@@ -470,69 +471,106 @@ def check_df_size(size):
         raise ValueError("No valid mutations passed your distance and ddG filters. Please increase one or both of these parameters and try again.")
 
 
-def main(args):
-    print('=' * 100)
-    print(args)
-    print('=' * 100)
-    cfg = get_config(args.mode)
-    model = get_model(args.mode, cfg)
-    pdb_data = load_pdb(args.pdb, args.chains)
-    pdbname = os.path.basename(args.pdb)
-    print(f"Loaded PDB {pdbname}")
+class ThermoMPNN:
+    """
+    ThermoMPNN class for running ThermoMPNN models.
+    Args:
+        pdb (str): Path to PDB file.
+        out (str, optional): Output mutation prefix to save csv. Defaults to 'ssm'.
+        chains (Optional[List[str]], optional): Chains to run SSM on. Defaults to None for all.
+        mode (Literal["single", "additive", "epistatic"], optional): SSM mode. Defaults to 'single'.
+        batch_size (int, optional): Batch size. Defaults to 256.
+        threshold (float, optional): Threshold for SSM sweep. 
+            By default, ThermoMPNN only saves mutations below this threshold (-0.5 kcal/mol). 
+            To save all mutations, set this really high (e.g., 100).
+        distance (float, optional): Filter for double mutant predictions using pairwise Ca distance cutoff (default is 5 A).
+        ss_penalty (bool, optional): Add explicit disulfide breakage penalty. Default is False.
+    """
+    
+    def __init__(
+            self, 
+            pdb: str,
+            out: str= 'ssm',
+            chains: Optional[List[str]]=None,
+            mode: Literal["single", "additive", "epistatic"]='single', 
+            batch_size: int=256,
+            threshold: float=-0.5,
+            distance: float=5.0,
+            ss_penalty: bool=False,
+            ) -> None:
+        self.pdb=pdb
+        self.out=out
+        self.chains=chains
+        self.batch_size=batch_size
+        self.threshold=threshold
+        self.distance=distance
+        self.ss_penalty=ss_penalty
+        self.mode=mode
 
-    if (args.mode == "single") or (args.mode == "additive"):
-        ddg, S = run_single_ssm(pdb_data, cfg, model)
+    def process(self):
+        '''
+        Run ThermoMPNN on a PDB file.
+        '''
 
-        if args.mode == "single":
-            ddg, mutations = format_output_single(ddg, S, args.threshold)
-        else:
-            ddg, mutations = format_output_double(
-                ddg, S, args.threshold, pdb_data, args.distance
+        cfg = get_config(self.mode)
+        model = get_model(self.mode, cfg)
+        pdb_data = load_pdb(self.pdb, self.chains)
+        pdbname = os.path.basename(self.pdb)
+        print(f"Loaded PDB {pdbname}")
+
+        if (self.mode == "single") or (self.mode == "additive"):
+            ddg, S = run_single_ssm(pdb_data, cfg, model)
+
+            if self.mode == "single":
+                ddg, mutations = format_output_single(ddg, S, self.threshold)
+            else:
+                ddg, mutations = format_output_double(
+                    ddg, S, self.threshold, pdb_data, self.distance
+                )
+
+        elif self.mode == "epistatic":
+            ddg, mutations = run_epistatic_ssm(
+                pdb_data, cfg, model, self.distance, self.threshold, self.batch_size
             )
 
-    elif args.mode == "epistatic":
-        ddg, mutations = run_epistatic_ssm(
-            pdb_data, cfg, model, args.distance, args.threshold, args.batch_size
-        )
+        else:
+            raise ValueError("Invalid mode selected!")
 
-    else:
-        raise ValueError("Invalid mode selected!")
+        df = pd.DataFrame({"ddG (kcal/mol)": ddg, "Mutation": mutations})
 
-    df = pd.DataFrame({"ddG (kcal/mol)": ddg, "Mutation": mutations})
+        check_df_size(df.shape[0])
 
-    check_df_size(df.shape[0])
+        if self.mode != "single":
+            df = distance_filter(df, pdb_data, self.distance)
 
-    if args.mode != "single":
-        df = distance_filter(df, pdb_data, args.distance)
+        if self.ss_penalty:
+            df = disulfide_penalty(df, pdb_data, self.mode)
 
-    if args.ss_penalty:
-        df = disulfide_penalty(df, pdb_data, args.mode)
+        df = df.dropna(subset=["ddG (kcal/mol)"])
+        if self.threshold <= -0.0:
+            df = df.sort_values(by=["ddG (kcal/mol)"])
 
-    df = df.dropna(subset=["ddG (kcal/mol)"])
-    if args.threshold <= -0.0:
-        df = df.sort_values(by=["ddG (kcal/mol)"])
+        if self.mode != "single":  # sort to have neat output order
+            df[["mut1", "mut2"]] = df["Mutation"].str.split(":", n=2, expand=True)
+            df["pos1"] = df["mut1"].str[1:-1].astype(int) + 1
+            df["pos2"] = df["mut2"].str[1:-1].astype(int) + 1
 
-    if args.mode != "single":  # sort to have neat output order
-        df[["mut1", "mut2"]] = df["Mutation"].str.split(":", n=2, expand=True)
-        df["pos1"] = df["mut1"].str[1:-1].astype(int) + 1
-        df["pos2"] = df["mut2"].str[1:-1].astype(int) + 1
+            df = df.sort_values(by=["pos1", "pos2"])
+            df = df[["ddG (kcal/mol)", "Mutation", "CA-CA Distance"]].reset_index(drop=True)
 
-        df = df.sort_values(by=["pos1", "pos2"])
-        df = df[["ddG (kcal/mol)", "Mutation", "CA-CA Distance"]].reset_index(drop=True)
+        check_df_size(df.shape[0])
 
-    check_df_size(df.shape[0])
+        try:
+            df = renumber_pdb(df, pdb_data, self.mode)
 
-    try:
-        df = renumber_pdb(df, pdb_data, args.mode)
+        except (KeyError, IndexError):
+            print(
+                "PDB renumbering failed (sorry!) You can still use the raw position data. Or, you can renumber your PDB, fill any weird gaps, and try again."
+            )
 
-    except (KeyError, IndexError):
-        print(
-            "PDB renumbering failed (sorry!) You can still use the raw position data. Or, you can renumber your PDB, fill any weird gaps, and try again."
-        )
+        df.to_csv(self.out + ".csv")
 
-    df.to_csv(args.out + ".csv")
-
-    return
+        return
 
 
 if __name__ == "__main__":
@@ -575,4 +613,15 @@ if __name__ == "__main__":
         action="store_true",
         help="Add explicit disulfide breakage penalty. Default is False.",
     )
-    main(parser.parse_args())
+    args=parser.parse_args()
+    m=ThermoMPNN(
+        pdb=args.pdb,
+        out=args.out,
+        chains=args.chains,
+        mode=args.mode,
+        batch_size=args.batch_size,
+        threshold=args.threshold,
+        distance=args.distance,
+        ss_penalty=args.ss_penalty,
+    )
+    m.process()
