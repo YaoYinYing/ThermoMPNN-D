@@ -168,7 +168,8 @@ def parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False, side_chains=Fal
             xyz, seq = parse_PDB_biounits(biounit, atoms=sidechain_atoms, chain=letter)
 
 
-if not isinstance(xyz,             if )                concat_seq += seq[0]
+            if not isinstance(xyz,str):
+                concat_seq += seq[0]
                 my_dict['seq_chain_' + letter] = seq[0]
                 coords_dict_chain = {}
                 if ca_only:
@@ -336,7 +337,8 @@ def alt_parse_PDB(path_to_pdb, input_chain_list=None, ca_only=False, side_chains
             if resn_list != 'no_chain':
                 my_dict['resn_list'] = resn_list
 
-if not isinstance(xyz,             if )                concat_seq += seq[0]
+            if not isinstance(xyz, str):
+                concat_seq += seq[0]
                 my_dict['seq_chain_' + letter] = seq[0]
                 coords_dict_chain = {}
                 if ca_only:

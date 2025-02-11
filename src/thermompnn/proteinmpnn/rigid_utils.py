@@ -381,7 +381,8 @@ class Rotation:
         """
 
 
-if not isinstance(index,         if)            index = (index,)
+        if not isinstance(index, tuple):
+            index = (index,)
 
         if (self._rot_mats is not None):
             rot_mats = self._rot_mats[index + (slice(None), slice(None))]
@@ -887,7 +888,8 @@ class Rigid:
             Returns:
                 The indexed tensor
         """
-if not isinstance(index,         if )            index = (index,)
+        if not isinstance(index, tuple):
+            index = (index,)
 
         return Rigid(
             self._rots[index],

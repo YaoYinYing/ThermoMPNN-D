@@ -86,6 +86,8 @@ Documentation = "https://github.com/Kuhlman-Lab/ThermoMPNN-D"
 Source = "https://github.com/YaoYinYing/ThermoMPNN-D"
 Tracker = "https://github.com/YaoYinYing/ThermoMPNN-D"
 
+[project.scripts]
+thermompnn = "thermompnn.run:main"
 
 [tool.flit.module]
 name = "thermompnn"

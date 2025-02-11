@@ -11,12 +11,13 @@ from tqdm import tqdm
 from thermompnn.train_thermompnn import parse_cfg
 from thermompnn.trainer.v2_trainer import (TransferModelPLv2,
                                            TransferModelPLv2Siamese)
-from thermompnn.utils.get_weights import thermompnn_weigths, vanilla_weigths
+from thermompnn.utils.get_weights import thermompnn_weigths
 
+CONFIG_DIR=os.path.join(os.path.dirname(os.path.realpath(__file__)), "configs")
 
 def get_model(mode: Literal['single', 'epistatic'], config):
     cwd = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    model_dir = vanilla_weigths.setup()
+    model_dir = thermompnn_weigths.setup()
 
     if (mode.lower() == "single") or (mode.lower() == "additive"):
         model_path = os.path.join(model_dir, "ThermoMPNN-ens1.ckpt")
@@ -53,16 +54,16 @@ def get_config(mode):
     """Grabs relevant configs from disk."""
 
     current_location = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
-    local = os.path.join(os.path.join(current_location), "examples/configs/local.yaml")
+    local = os.path.join(CONFIG_DIR, "local.yaml")
 
     if mode == "single" or mode == "additive":
         aux = os.path.join(
-            os.path.join(current_location), "examples/configs/single.yaml"
+            CONFIG_DIR, "single.yaml"
         )
 
     elif mode == "epistatic":
         aux = os.path.join(
-            os.path.join(current_location), "examples/configs/epistatic.yaml"
+            CONFIG_DIR, "epistatic.yaml"
         )
     else:
         raise ValueError("Invalid mode selected!")
@@ -351,7 +352,8 @@ def custom_parse_PDB(
                 my_dict["resn_list_" + letter] = resn_list
 
 
-if not isinstance(xyz,             if )                concat_seq += seq[0]
+            if not isinstance(xyz, str):
+                concat_seq += seq[0]
                 my_dict["seq_chain_" + letter] = seq[0]
                 coords_dict_chain = {}
                 if ca_only:
