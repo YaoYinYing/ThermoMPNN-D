@@ -146,7 +146,6 @@ test.sh
 
 *.pdf
 jobs
-/examples
 *.ckpt
 *.zip
 .DS_Store
