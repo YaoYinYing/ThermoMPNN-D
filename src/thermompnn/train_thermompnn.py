@@ -1,5 +1,5 @@
 import sys
-import wandb
+
 import os
 from torch.utils.data import DataLoader
 
@@ -69,6 +69,8 @@ def parse_cfg(cfg):
 
 def train(cfg):
     print('Configuration:\n', cfg)
+
+    import wandb
 
     cfg = parse_cfg(cfg)
 

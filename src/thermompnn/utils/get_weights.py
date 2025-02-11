@@ -28,6 +28,7 @@ class ModelFetchSetting:
     
     def setup(self):
         if self.ready:
+            print(f'Already downloaded {self.basename} to {self.weight_path}')
             return self.weight_path
         
         print(f'Downloading {self.basename}...')
@@ -42,7 +43,8 @@ class ModelFetchSetting:
                 z.extractall(path=dist_dir)
 
         extracted_files = os.listdir(dist_dir)
-        return dist_dir, extracted_files
+        print(f'Extracted {extracted_files}')
+        return self.weight_path
 
 
 thermompnn_weigths=ModelFetchSetting(

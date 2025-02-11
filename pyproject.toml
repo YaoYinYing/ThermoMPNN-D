@@ -5,7 +5,7 @@ build-backend = "flit_core.buildapi"
 [project]
 name =  "thermompnn"
 authors = [
-    {name = "Yinying Yao", email = "yaoyy.hi@gmail.com"},
+    {name = "Kuhlman-Lab", email = "place@holder.com"},
 ]
 description = "A fork of https://github.com/Kuhlman-Lab/ThermoMPNN-D"
 readme = "README.md"

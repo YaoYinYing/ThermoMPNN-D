@@ -8,6 +8,7 @@ import numpy as np
 from thermompnn.protein_mpnn_utils import ProteinMPNN
 from thermompnn.protein_mpnn_utils import gather_nodes, gather_edges, DecLayer, cat_neighbors_nodes, PositionWiseFeedForward
 
+from thermompnn.utils.get_weights import thermompnn_weigths, vanilla_weigths
 
 def get_protein_mpnn(cfg, version='v_48_020.pt'):
     """Loading Pre-trained ProteinMPNN model for structure embeddings"""
@@ -24,7 +25,7 @@ def get_protein_mpnn(cfg, version='v_48_020.pt'):
     else:
         use_IPMP = False
 
-    model_weight_dir = os.path.join(cfg.platform.thermompnn_dir, 'vanilla_model_weights')
+    model_weight_dir = vanilla_weigths.setup()
     checkpoint_path = os.path.join(model_weight_dir, version)
     print('Loading model %s', checkpoint_path)
     checkpoint = torch.load(checkpoint_path, map_location='cpu') 
