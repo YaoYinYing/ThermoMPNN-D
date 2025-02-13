@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 
 import numpy as np
 import torch
@@ -11,15 +12,15 @@ from thermompnn.protein_mpnn_utils import (DecLayer, PositionWiseFeedForward,
 from thermompnn.utils.get_weights import thermompnn_weigths, vanilla_weigths
 
 
-def get_protein_mpnn(cfg, version='v_48_020.pt'):
+def get_protein_mpnn(cfg, checkpoint_version: Optional[str]=None):
     """Loading Pre-trained ProteinMPNN model for structure embeddings"""
     hidden_dim = 128
     num_layers = 3
 
-    if 'version' in cfg.model:
-        version = cfg.model.version
+    if checkpoint_version is None and 'version' in cfg.model:
+        version: str = cfg.model.version
     else:
-        version = 'v_48_020.pt'
+        version: str = 'v_48_020.pt'
 
     if 'IPMP' in version:
         use_IPMP = True
@@ -28,8 +29,8 @@ def get_protein_mpnn(cfg, version='v_48_020.pt'):
 
     model_weight_dir = vanilla_weigths.setup()
     checkpoint_path = os.path.join(model_weight_dir, version)
-    print('Loading model %s', checkpoint_path)
-    checkpoint = torch.load(checkpoint_path, map_location='cpu')
+    print(f'Loading model {checkpoint_path}', )
+    checkpoint = torch.load(checkpoint_path, map_location='cpu', weights_only=True)
 
     dropout = cfg.model.proteinmpnn_dropout if 'proteinmpnn_dropout' in cfg.model else 0.1
     if dropout != 0.1:

@@ -9,6 +9,8 @@ import torch
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
+from RosettaPy.common import Mutant
+
 from thermompnn.datasets.dataset_utils import Mutation
 from thermompnn.datasets.v2_datasets import tied_featurize_mut
 from thermompnn.model.v2_model import _dist, batched_index_select
@@ -16,8 +18,103 @@ from thermompnn.ssm_utils import (distance_filter, disulfide_penalty,
                                   get_config, get_dmat, get_model, load_pdb,
                                   renumber_pdb)
 
+RUN_MODE_T=Literal["single", "additive", "epistatic"]
+
+def double_mutant2tensor(mutant: Mutant):
+    """
+    Convert a double-mutant (two mutations) into three PyTorch tensors:
+    (pos_combos, wtAA, mutAA).
+
+    This function expects exactly two Mutation objects in mutant.mutations.
+    Each Mutation includes:
+      - chain_id  (str)
+      - position  (int, 1-based)
+      - wt_res    (str, wild-type residue)
+      - mut_res   (str, mutated residue)
+
+    Returns:
+      Tuple[torch.Tensor, torch.Tensor, torch.Tensor]
+        pos_combos: shape [1, 2] - the pair of mutation positions
+        wtAA:       shape [1, 2] - the corresponding wild-type residue indices
+        mutAA:      shape [1, 2] - the corresponding mutant residue indices
+
+    Raises:
+      ValueError: if the mutant does not have exactly two Mutations.
+    """
+    if len(mutant.mutations) != 2:
+        raise ValueError("double_mutant2tensor requires exactly 2 mutations in 'mutant'.")
+
+    ALPHABET = "ACDEFGHIKLMNPQRSTVWYX"
+
+    # Extract the mutations
+    m1, m2 = mutant.mutations
+
+    # Positions (1D array for each pair -> shape [1,2])
+    pos_combos = torch.tensor([[m1.position, m2.position]], dtype=torch.long)
+
+    # Wild-type residues as indices
+    wtAA = torch.tensor(
+        [[ALPHABET.index(m1.wt_res), ALPHABET.index(m2.wt_res)]],
+        dtype=torch.long,
+    )
+
+    # Mutant residues as indices
+    mutAA = torch.tensor(
+        [[ALPHABET.index(m1.mut_res), ALPHABET.index(m2.mut_res)]],
+        dtype=torch.long,
+    )
+
+    return pos_combos, wtAA, mutAA
 
 def get_ssm_mutations_double(pdb, dthresh):
+    """
+    Generate all possible double mutations for residue pairs within a specified distance threshold.
+
+    This function is typically used for site-saturation mutagenesis (SSM) calculations,
+    producing every pairwise combination of mutations at two positions that are
+    sufficiently close in space.
+
+    Args:
+        pdb (dict):
+            A dictionary-like object containing:
+              - "seq" (str): The wild-type amino acid sequence, possibly including "-" for missing residues.
+              - Additional structure information used by `get_dmat` to compute residue–residue distances.
+        dthresh (float):
+            The distance cutoff for selecting residue pairs (in Å). Only pairs
+            separated by a distance less than `dthresh` (and greater than 0) are considered.
+
+    Returns:
+        Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+            - **pos_combos** (torch.Tensor): Shape `[N, 2]`; each row contains two
+              residue indices (0-based) whose Cα atoms are within `dthresh`.
+            - **wtAA** (torch.Tensor): Shape `[N, 2]`; wild-type amino acid indices
+              (in the ALPHABET string `"ACDEFGHIKLMNPQRSTVWYX"`) for each position in `pos_combos`.
+            - **mutAA** (torch.Tensor): Shape `[N, 2]`; enumerated mutant amino acid
+              indices for each pair. Only true double mutations are included (no single- or self-mutations).
+
+    How it works:
+        1. Missing residues ("-") in the input sequence are skipped.
+        2. The pairwise distance matrix (`dmat`) is computed via `get_dmat`, and
+           only residue pairs below `dthresh` are retained.
+        3. For each qualifying pair, the function enumerates all 20×20 possible amino
+           acid double substitutions (using an alphabet of 20 AAs, plus 'X' at the end).
+        4. Self- and single-mutant combinations (where at least one position is unchanged)
+           are removed, leaving only valid double mutants.
+        5. The function removes redundant entries (upper-triangle duplicates) to avoid duplication.
+
+    Example:
+        >>> pos_combos, wtAA, mutAA = get_ssm_mutations_double(pdb_data, 8.0)
+        >>> pos_combos.shape
+        torch.Size([..., 2])
+        >>> wtAA.shape
+        torch.Size([..., 2])
+        >>> mutAA.shape
+        torch.Size([..., 2])
+
+    Note:
+        - Ensure the `pdb` object is properly set up for `get_dmat`.
+        - Returns PyTorch tensors for compatibility with downstream deep-learning pipelines.
+    """
     # make mutation list for SSM run
     ALPHABET = "ACDEFGHIKLMNPQRSTVWYX"
     MUT_POS, MUT_WT = [], []
@@ -30,19 +127,17 @@ def get_ssm_mutations_double(pdb, dthresh):
         else:
             MUT_WT.append("-")
 
-    # Use distance filter BEFORE data setup / inference for speedup
-    from thermompnn.ssm_utils import get_dmat
-
     dmat = np.triu(get_dmat(pdb))  # [L, L]
     mask = (dmat < dthresh) & (dmat > 0.0)
     pos1, pos2 = np.where(mask)
     pos_combos = [(p1, p2) for p1, p2 in zip(pos1, pos2)]
     pos_combos = np.array(pos_combos)  # [combos, 2]
-    wtAA = np.zeros_like(pos_combos)
+
+    wtAA_idx = np.zeros_like(pos_combos)
     # fill in wtAA for each pos combo
     for p_idx in range(pos_combos.shape[0]):
-        wtAA[p_idx, 0] = ALPHABET.index(MUT_WT[pos_combos[p_idx, 0]])
-        wtAA[p_idx, 1] = ALPHABET.index(MUT_WT[pos_combos[p_idx, 1]])
+        wtAA_idx[p_idx, 0] = ALPHABET.index(MUT_WT[pos_combos[p_idx, 0]])
+        wtAA_idx[p_idx, 1] = ALPHABET.index(MUT_WT[pos_combos[p_idx, 1]])
 
     # make default mutAA bundle for broadcasting
     one = np.arange(20).repeat(20)
@@ -51,24 +146,23 @@ def get_ssm_mutations_double(pdb, dthresh):
     n_comb = pos_combos.shape[0]
     mutAA = np.tile(mutAA, (n_comb, 1))
 
-    # the problem is 2nd wtAA/pos_combos and 2nd mutAA are correlated so they always show up together
-    # repeat these 20x20 times
-    wtAA = np.repeat(wtAA, 400, axis=0)
+    wtAA_idx = np.repeat(wtAA_idx, 400, axis=0)
     pos_combos = np.repeat(pos_combos, 400, axis=0)
 
     # filter out self-mutations and single-mutations
-    mask = np.sum(mutAA == wtAA, -1).astype(bool)
+    mask = np.sum(mutAA == wtAA_idx, -1).astype(bool)
     pos_combos = pos_combos[~mask, :]
     mutAA = mutAA[~mask, :]
-    wtAA = wtAA[~mask, :]
+    wtAA_idx = wtAA_idx[~mask, :]
 
-    # filter out upper-triangle portions - if mutAA or pos is larger, it's already been checked
+    # remove upper-triangle duplicates
     mask = pos_combos[:, 0] > pos_combos[:, 1]
     pos_combos = pos_combos[~mask, :]
     mutAA = mutAA[~mask, :]
-    wtAA = wtAA[~mask, :]
+    wtAA_idx = wtAA_idx[~mask, :]
 
-    return torch.tensor(pos_combos), torch.tensor(wtAA), torch.tensor(mutAA)
+    return torch.tensor(pos_combos), torch.tensor(wtAA_idx), torch.tensor(mutAA)
+
 
 
 def run_double(
@@ -230,7 +324,7 @@ class SSMDataset(torch.utils.data.Dataset):
         return self.POS[index, :], self.WTAA[index, :], self.MUTAA[index, :]
 
 
-def run_single_ssm(pdb, cfg, model, device='cuda'):
+def run_single_ssm(pdb_data, cfg, model, device='cuda'):
     """Runs single-mutant SSM sweep with ThermoMPNN v2"""
 
     model.eval()
@@ -238,10 +332,10 @@ def run_single_ssm(pdb, cfg, model, device='cuda'):
     stime = time.time()
 
     # placeholder mutation to keep featurization from throwing error
-    pdb["mutation"] = Mutation([0], ["A"], ["A"], [0.0], "")
+    pdb_data["mutation"] = Mutation([0], ["A"], ["A"], [0.0], "")
 
     # featurize input
-    batch = tied_featurize_mut([pdb])
+    batch = tied_featurize_mut([pdb_data],device=device)
     (
         X,
         S,
@@ -256,6 +350,8 @@ def run_single_ssm(pdb, cfg, model, device='cuda'):
         mut_ddGs,
         atom_mask,
     ) = batch
+
+    print(f'{batch=}')
 
     X = X.to(device)
     S = S.to(device)
@@ -326,7 +422,7 @@ def format_output_single(ddg, S, threshold=-0.5):
     return ddg, mutlist
 
 
-def format_output_double(ddg, S, threshold, pdb, distance):
+def format_output_double(ddg, S, threshold, pdb_data, distance):
     """Converts raw SSM predictions into nice format for analysis"""
     stime = time.time()
     ALPHABET = "ACDEFGHIKLMNPQRSTVWYX"
@@ -337,7 +433,7 @@ def format_output_double(ddg, S, threshold, pdb, distance):
     ddg = ddg[:, :20, :, :20]  # drop X predictions
 
     # Pre-mask matrix with distance constraints for speedup
-    dmat = get_dmat(pdb)
+    dmat = get_dmat(pdb_data)
     assert ddg.shape[0] == dmat.shape[0]
     valid_mask = (
         (ddg <= threshold)
@@ -397,7 +493,7 @@ def format_output_epistatic(ddg, S, pos, wtAA, mutAA, threshold=-0.5):
     return ddg, mut_list
 
 
-def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device="cuda"):
+def run_epistatic_ssm(pdb_data, cfg, model, distance, threshold, batch_size, device="cuda", mutant: Optional[Mutant]=None):
     """Run epistatic model on double mutations"""
 
     model.eval()
@@ -405,10 +501,10 @@ def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device="
     stime = time.time()
 
     # placeholder mutation to keep featurization from throwing error
-    pdb["mutation"] = Mutation([0], ["A"], ["A"], [0.0], "")
+    pdb_data["mutation"] = Mutation([0], ["A"], ["A"], [0.0], "")
 
     # featurize input
-    batch = tied_featurize_mut([pdb])
+    batch = tied_featurize_mut([pdb_data], device=device)
     (
         X,
         S,
@@ -423,6 +519,7 @@ def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device="
         mut_ddGs,
         atom_mask,
     ) = batch
+    print(f'{batch=}')
 
     X = X.to(device)
     S = S.to(device)
@@ -438,10 +535,14 @@ def run_epistatic_ssm(pdb, cfg, model, distance, threshold, batch_size, device="
     all_mpnn_hid, mpnn_embed, _, mpnn_edges = model.prot_mpnn(
         X, S, mask, chain_M, residue_idx, chain_encoding_all
     )
-
-    # grab double mutation inputs
-    MUT_POS, MUT_WT_AA, MUT_MUT_AA = get_ssm_mutations_double(pdb, distance)
+    if not mutant:
+        # grab double mutation inputs
+        MUT_POS, MUT_WT_AA, MUT_MUT_AA = get_ssm_mutations_double(pdb_data, distance)
+    else:
+        MUT_POS, MUT_WT_AA, MUT_MUT_AA = double_mutant2tensor(mutant)
+    print(f'{MUT_POS=}, {MUT_WT_AA=}, {MUT_MUT_AA=}')
     dataset = SSMDataset(MUT_POS, MUT_WT_AA, MUT_MUT_AA)
+        
     loader = DataLoader(dataset, shuffle=False, batch_size=batch_size, num_workers=8)
 
     preds = run_double(
@@ -486,12 +587,12 @@ class ThermoMPNN:
             pdb: str,
             out: str = 'ssm',
             chains: Optional[List[str]] = None,
-            mode: Literal["single", "additive", "epistatic"] = 'single',
+            mode: RUN_MODE_T  = 'single',
             batch_size: int = 256,
             threshold: float = -0.5,
             distance: float = 5.0,
             ss_penalty: bool = False,
-            device: str = 'cuda',
+            device: str = 'cpu',
     ) -> None:
         self.pdb = pdb
         self.out = out
@@ -505,17 +606,18 @@ class ThermoMPNN:
 
         self.pick_device()
 
+        self.cfg = get_config(self.mode)
+        self.model = get_model(self.mode, self.cfg)
+
+        self.pdb_data = load_pdb(self.pdb, self.chains)
+
     def pick_device(self):
-        if self.device == 'cuda':
-            if torch.cuda.is_available():
-                self.device = 'cuda'
-            else:
-                self.device = 'cpu'
-        elif self.device == 'mps':
-            if torch.backends.mps.is_available() and torch.backends.mps.is_built():
-                self.device = 'mps'
-            else:
-                self.device = 'cpu'
+        if self.device == 'cuda'and torch.cuda.is_available():
+            self.device = 'cuda'
+
+        elif self.device == 'mps' and  torch.backends.mps.is_available() and torch.backends.mps.is_built():
+            self.device = 'mps'
+
         else:
             self.device = 'cpu'
 
@@ -523,44 +625,25 @@ class ThermoMPNN:
         print(f"Using device: {self.device}")
         print('-' * 79)
 
-    def process(self):
-        '''
-        Run ThermoMPNN on a PDB file.
-        '''
+    def score(self, mutant: Mutant):
+        ddg, mutations = run_epistatic_ssm(
+            self.pdb_data, self.cfg, self.model, self.distance, self.threshold, self.batch_size, device=self.device, mutant=mutant
+        )
 
-        cfg = get_config(self.mode)
-        model = get_model(self.mode, cfg)
-        pdb_data = load_pdb(self.pdb, self.chains)
-        pdbname = os.path.basename(self.pdb)
-        print(f"Loaded PDB {pdbname}")
-
-        if (self.mode == "single") or (self.mode == "additive"):
-            ddg, S = run_single_ssm(pdb_data, cfg, model, device=self.device)
-
-            if self.mode == "single":
-                ddg, mutations = format_output_single(ddg, S, self.threshold)
-            else:
-                ddg, mutations = format_output_double(
-                    ddg, S, self.threshold, pdb_data, self.distance
-                )
-
-        elif self.mode == "epistatic":
-            ddg, mutations = run_epistatic_ssm(
-                pdb_data, cfg, model, self.distance, self.threshold, self.batch_size, device=self.device
-            )
-
-        else:
-            raise ValueError("Invalid mode selected!")
+        self.post_process(ddg, mutations)
+        return ddg, mutations
+    
+    def post_process(self, ddg, mutations):
 
         df = pd.DataFrame({"ddG (kcal/mol)": ddg, "Mutation": mutations})
 
         check_df_size(df.shape[0])
 
         if self.mode != "single":
-            df = distance_filter(df, pdb_data, self.distance)
+            df = distance_filter(df, self.pdb_data, self.distance)
 
         if self.ss_penalty:
-            df = disulfide_penalty(df, pdb_data, self.mode)
+            df = disulfide_penalty(df, self.pdb_data, self.mode)
 
         df = df.dropna(subset=["ddG (kcal/mol)"])
         if self.threshold <= -0.0:
@@ -577,7 +660,7 @@ class ThermoMPNN:
         check_df_size(df.shape[0])
 
         try:
-            df = renumber_pdb(df, pdb_data, self.mode)
+            df = renumber_pdb(df, self.pdb_data, self.mode)
 
         except (KeyError, IndexError):
             print(
@@ -586,7 +669,38 @@ class ThermoMPNN:
 
         df.to_csv(self.out + ".csv")
 
-        return
+
+    def process(self):
+        '''
+        Run ThermoMPNN on a PDB file.
+        '''
+
+        
+        
+        pdbname = os.path.basename(self.pdb)
+        print(f"Loaded PDB {pdbname}")
+
+        if (self.mode == "single") or (self.mode == "additive"):
+            ddg, S = run_single_ssm(self.pdb_data, self.cfg, self.model, device=self.device)
+
+            if self.mode == "single":
+                ddg, mutations = format_output_single(ddg, S, self.threshold)
+            else:
+                ddg, mutations = format_output_double(
+                    ddg, S, self.threshold, self.pdb_data, self.distance
+                )
+
+        elif self.mode == "epistatic":
+            ddg, mutations = run_epistatic_ssm(
+                self.pdb_data, self.cfg, self.model, self.distance, self.threshold, self.batch_size, device=self.device
+            )
+
+        else:
+            raise ValueError("Invalid mode selected!")
+        
+        self.post_process(ddg, mutations)
+
+        
 
 
 def main():
@@ -633,6 +747,7 @@ def main():
     parser.add_argument(
         "--device", type=str, help="device to use", default="cpu"
     )
+
     args = parser.parse_args()
     m = ThermoMPNN(
         pdb=args.pdb,
