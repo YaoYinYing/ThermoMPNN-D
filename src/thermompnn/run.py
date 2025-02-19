@@ -523,7 +523,7 @@ class ThermoMPNN:
         print(f"Using device: {self.device}")
         print('-' * 79)
 
-    def process(self):
+    def process(self, save_csv:bool=True) -> pd.DataFrame:
         '''
         Run ThermoMPNN on a PDB file.
         '''
@@ -584,9 +584,10 @@ class ThermoMPNN:
                 "PDB renumbering failed (sorry!) You can still use the raw position data. Or, you can renumber your PDB, fill any weird gaps, and try again."
             )
 
-        df.to_csv(self.out + ".csv")
+        if save_csv:
+            df.to_csv(self.out + ".csv")
 
-        return
+        return df
 
 
 def main():
